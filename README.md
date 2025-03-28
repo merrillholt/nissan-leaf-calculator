@@ -13,15 +13,48 @@ A Python application that calculates charging times for a Nissan Leaf electric v
   - Battery health percentage
   - Current charge level
 - Provides estimates for both 80% and 100% charging targets
-- User-friendly GUI interface
+- Available with either GUI or console interface
 
 ## Requirements
 
 - Python 3.x
-- tkinter (usually comes with Python)
+- tkinter (for GUI mode only, usually comes with Python)
+
+## Installation
+
+No special installation is required. Simply clone the repository and run the application.
 
 ## Usage
 
-Run the application using:
+### Command-line Options
 
-python "Python Modules/NissanLeafCharger.py"
+```bash
+# Run with GUI (default)
+python main.py
+
+# Run with GUI explicitly
+python main.py --gui
+
+# Run in console mode
+python main.py --console
+```
+
+### Running Directly
+
+You can also run the individual interfaces directly:
+
+```bash
+# GUI interface
+python "Python Modules/leaf_gui.py"
+
+# Console interface
+python "Python Modules/leaf_console.py"
+```
+
+## Project Structure
+
+- `main.py` - Main entry point with command-line argument handling
+- `Python Modules/`
+  - `leaf_core.py` - Core calculation logic
+  - `leaf_gui.py` - GUI interface using tkinter
+  - `leaf_console.py` - Console interface
