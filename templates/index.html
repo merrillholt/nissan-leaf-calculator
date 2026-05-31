@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="Leaf Calculator">
+  <title>Nissan Leaf Charging Calculator</title>
+
+  <!-- Critical CSS inline for fast first paint -->
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      font-size: 16px;
+      line-height: 1.5;
+      color: #333;
+      background: #f5f5f5;
+    }
+
+    .container {
+      max-width: 600px;
+      margin: 0 auto;
+      padding: 1rem;
+    }
+
+    h1 {
+      font-size: 1.5rem;
+      margin-bottom: 1rem;
+      color: #003da5;
+    }
+
+    fieldset {
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      padding: 1rem;
+      margin-bottom: 1rem;
+    }
+
+    legend {
+      font-weight: 600;
+      color: #003da5;
+      padding: 0 0.5rem;
+    }
+
+    label {
+      display: block;
+      margin-top: 0.75rem;
+      margin-bottom: 0.25rem;
+      font-weight: 500;
+    }
+
+    input, select {
+      width: 100%;
+      font-size: 16px;
+      padding: 0.75rem;
+      min-height: 44px;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      background: white;
+    }
+
+    button {
+      width: 100%;
+      font-size: 16px;
+      font-weight: 600;
+      padding: 0.75rem;
+      min-height: 44px;
+      background: #003da5;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+
+    .start-time {
+      background: white;
+      padding: 0.75rem;
+      margin-bottom: 1rem;
+      border-radius: 4px;
+      font-size: 0.9rem;
+      color: #666;
+    }
+  </style>
+
+  <!-- External stylesheet for additional styles -->
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+  <main class="container">
+    <h1>Nissan Leaf Charging Calculator</h1>
+
+    <!-- Error message display -->
+    {% if error %}
+    <div class="error" role="alert">
+      <strong>Error:</strong> {{ error }}
+    </div>
+    {% endif %}
+
+    <!-- Calculation start time display -->
+    {% if results %}
+    <div class="start-time">
+      <strong>Calculation Time:</strong> <time>{{ results.start_time }}</time>
+    </div>
+    {% endif %}
+
+    <!-- Main calculation form -->
+    <form method="POST" action="/" id="calculator-form">
+      <fieldset>
+        <legend>Battery Configuration</legend>
+
+        <label for="battery_capacity">Battery Capacity</label>
+        <select id="battery_capacity" name="battery_capacity" required>
+          <option value="40" {% if not form_data or form_data.battery_capacity == '40' or form_data.battery_capacity == 40.0 %}selected{% endif %}>40 kWh</option>
+          <option value="62" {% if form_data.battery_capacity == '62' or form_data.battery_capacity == 62.0 %}selected{% endif %}>62 kWh</option>
+        </select>
+
+        <label for="battery_health">Battery Health (%)</label>
+        <input
+          type="number"
+          id="battery_health"
+          name="battery_health"
+          min="0"
+          max="100"
+          step="0.1"
+          value="{{ form_data.battery_health if form_data.battery_health else '100' }}"
+          required
+        >
+      </fieldset>
+
+      <fieldset>
+        <legend>Charging Configuration</legend>
+
+        <label for="charging_rate">Charging Rate</label>
+        <select id="charging_rate" name="charging_rate" required>
+          <option value="1.4" {% if form_data.charging_rate == '1.4' or form_data.charging_rate == 1.4 %}selected{% endif %}>Level 1 (120V) - 1.4 kW</option>
+          <option value="3.3" {% if form_data.charging_rate == '3.3' or form_data.charging_rate == 3.3 %}selected{% endif %}>Level 2 (240V) - 3.3 kW</option>
+          <option value="6.6" {% if not form_data or form_data.charging_rate == '6.6' or form_data.charging_rate == 6.6 %}selected{% endif %}>Level 2 (240V) - 6.6 kW</option>
+        </select>
+
+        <label for="current_charge">Current Charge (%)</label>
+        <input
+          type="number"
+          id="current_charge"
+          name="current_charge"
+          min="0"
+          max="100"
+          step="0.1"
+          value="{{ form_data.current_charge if form_data.current_charge else '0' }}"
+          required
+        >
+      </fieldset>
+
+      <button type="submit">Calculate Charging Time</button>
+    </form>
+
+    <!-- Results section (conditionally displayed) -->
+    {% if results %}
+    <section class="results">
+      <h2>Charging Time Estimates</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>Target</th>
+            <th>Duration</th>
+            <th>Completion Time</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>80% charge</td>
+            <td>{{ results.duration_80 }}</td>
+            <td>{{ results.completion_80 }}</td>
+          </tr>
+          <tr>
+            <td>100% charge</td>
+            <td>{{ results.duration_100 }}</td>
+            <td>{{ results.completion_100 }}</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+    {% endif %}
+  </main>
+
+  <!-- Progressive enhancement with AJAX -->
+  <script src="{{ url_for('static', filename='app.js') }}" defer></script>
+</body>
+</html>

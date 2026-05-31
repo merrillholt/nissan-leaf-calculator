@@ -1,5 +1,10 @@
+"""Core calculation module for Nissan Leaf charging times.
+
+This module provides the core charging calculation logic and time formatting
+utilities used by both GUI and console interfaces.
+"""
+
 from datetime import datetime, timedelta
-from typing import Dict, Tuple, Optional
 
 
 class NissanLeafCharger:
@@ -23,10 +28,10 @@ class NissanLeafCharger:
 
     def __init__(self):
         """Initialize the charger calculator with default values."""
-        self.battery_capacity = 40  # Default to 40 kWh
-        self.battery_health = 83   # Default to 100%
-        self.current_charge = 0     # Default to 0%
-        self.charging_rate = 6.6    # Default to 6.6kW
+        self.battery_capacity = 40.0  # Default to 40 kWh
+        self.battery_health = 100.0  # Default to 100%
+        self.current_charge = 0.0     # Default to 0%
+        self.charging_rate = 6.6      # Default to 6.6kW
 
     def calculate_charging_time(self, target_percentage: float) -> float:
         """Calculate time needed to reach target charge level.
@@ -40,7 +45,7 @@ class NissanLeafCharger:
         Raises:
             ValueError: If target_percentage is not between 0 and 100
         """
-        if not (0 <= target_percentage <= 100):
+        if not 0 <= target_percentage <= 100:
             raise ValueError('Target percentage must be between 0 and 100')
 
         actual_capacity = self.battery_capacity * (self.battery_health / 100)
@@ -50,6 +55,9 @@ class NissanLeafCharger:
 
         if self.charging_rate <= 0:
             return float('inf')
+
+        if energy_needed <= 0:
+            return 0.0
 
         energy_needed *= 1.1  # Add 10% for charging inefficiency
         return energy_needed / self.charging_rate
@@ -70,16 +78,19 @@ class ChargingTimeCalculator:
         """
         if hours == float('inf'):
             return 'Invalid input'
+        if hours < 0:
+            return 'Already at target charge'
 
         hours_int = int(hours)
         minutes = int((hours - hours_int) * 60)
+        h_unit = 'hour' if hours_int == 1 else 'hours'
+        m_unit = 'minute' if minutes == 1 else 'minutes'
 
         if hours_int == 0:
-            return f'{minutes} minutes'
-        elif minutes == 0:
-            return f'{hours_int} hours'
-        else:
-            return f'{hours_int} hours {minutes} minutes'
+            return f'{minutes} {m_unit}'
+        if minutes == 0:
+            return f'{hours_int} {h_unit}'
+        return f'{hours_int} {h_unit} {minutes} {m_unit}'
 
     @staticmethod
     def calculate_completion_time(start_time: datetime, hours: float) -> str:

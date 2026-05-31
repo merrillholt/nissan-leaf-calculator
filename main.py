@@ -24,13 +24,22 @@ def main():
         action="store_true",
         help="Run the application in GUI mode (default)"
     )
-    
+    parser.add_argument(
+        "--web", "-w",
+        action="store_true",
+        help="Run the application in web mode (Flask server)"
+    )
+
     args = parser.parse_args()
-    
-    # If both or neither is specified, default to GUI
-    if (args.console and args.gui) or (not args.console and not args.gui):
+
+    # Count how many modes are specified
+    modes_specified = sum([args.console, args.gui, args.web])
+
+    # If multiple or none specified, default to GUI
+    if modes_specified == 0 or modes_specified > 1:
         args.gui = True
         args.console = False
+        args.web = False
     
     # Adjust Python path to import modules with spaces in directory name
     import os
@@ -44,6 +53,21 @@ def main():
     if args.console:
         from leaf_console import main as console_main
         console_main()
+    elif args.web:
+        try:
+            from leaf_web import app
+            print("Starting Nissan Leaf Calculator web server...")
+            print("Access the calculator at: http://localhost:5000")
+            print("Press Ctrl+C to stop the server")
+            app.run(host='127.0.0.1', port=5000, debug=False)
+        except ImportError as e:
+            if "flask" in str(e).lower():
+                print("Error: Flask is not installed. Please install Flask.")
+                print("Run: pip3 install Flask")
+                print("Try running the console version with --console")
+            else:
+                print(f"Error importing web interface: {e}")
+            sys.exit(1)
     else:  # GUI mode
         try:
             from leaf_gui import main as gui_main

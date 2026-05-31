@@ -1,12 +1,31 @@
-from datetime import datetime
-from typing import Dict, Optional, Tuple
+"""Console interface for Nissan Leaf Charging Calculator.
 
-# Import from the same directory
+This module provides a text-based console interface for calculating
+Nissan Leaf charging times with interactive menus.
+"""
+
+from datetime import datetime
+from typing import Mapping, Optional, Tuple, Union
+
+# Import from the same directory with a path-based fallback
 try:
     from leaf_core import NissanLeafCharger, ChargingTimeCalculator
 except ImportError:
-    # For when run directly or from parent directory
-    from Python Modules.leaf_core import NissanLeafCharger, ChargingTimeCalculator
+    import importlib.util
+    from pathlib import Path
+
+    core_path = Path(__file__).with_name('leaf_core.py')
+    spec = importlib.util.spec_from_file_location('leaf_core', core_path)
+    if spec is not None:
+        leaf_core = importlib.util.module_from_spec(spec)
+        if spec.loader:
+            spec.loader.exec_module(leaf_core)
+            NissanLeafCharger = leaf_core.NissanLeafCharger  # type: ignore
+            ChargingTimeCalculator = leaf_core.ChargingTimeCalculator  # type: ignore
+        else:
+            raise ImportError("Cannot load leaf_core module")
+    else:
+        raise ImportError("Cannot create spec for leaf_core module")
 
 
 class ConsoleInterface:
@@ -45,7 +64,9 @@ class ConsoleInterface:
             except ValueError:
                 print('Please enter a valid number')
 
-    def display_menu(self, options: Dict[str, Tuple[str, float]], title: str) -> str:
+    def display_menu(
+            self, options: Mapping[str, Tuple[str, Union[int, float]]], title: str
+    ) -> str:
         """Display a menu and get user selection.
 
         Args:
@@ -68,6 +89,7 @@ class ConsoleInterface:
 
     def display_results(self):
         """Display charging time calculations."""
+        self.start_time = datetime.now()
         print('\nCharging Time Estimates:')
         print('-' * 50)
         print(f'Start time: {self.start_time.strftime("%Y-%m-%d %H:%M:%S")}')
@@ -90,16 +112,16 @@ class ConsoleInterface:
         """Run the main console interface loop."""
         # Convert charging rates to format expected by display_menu
         charging_rates = {
-            str(i+1): (name, rate) 
+            str(i+1): (name, rate)
             for i, (name, rate) in enumerate(self.charger.CHARGING_RATES.items())
         }
-        
+
         # Convert battery capacities to format expected by display_menu
         battery_capacities = {
-            str(i+1): (name, capacity) 
+            str(i+1): (name, capacity)
             for i, (name, capacity) in enumerate(self.charger.BATTERY_CAPACITIES.items())
         }
-        
+
         print('Nissan Leaf Charging Calculator')
         print('Enter "q" at any prompt to return to the main menu')
 
@@ -126,7 +148,7 @@ class ConsoleInterface:
             if choice == 'q':
                 break
 
-            elif choice == '1':
+            if choice == '1':
                 battery_choice = self.display_menu(
                     battery_capacities,
                     'Select Battery Capacity'

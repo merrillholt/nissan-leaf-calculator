@@ -1,13 +1,32 @@
+"""GUI interface for Nissan Leaf Charging Calculator.
+
+This module provides a tkinter-based graphical user interface for calculating
+Nissan Leaf charging times with real-time updates.
+"""
+
 import tkinter as tk
-from tkinter import ttk, messagebox
+from tkinter import ttk
 from datetime import datetime
 
-# Import from the same directory
+# Import from the same directory with a path-based fallback
 try:
     from leaf_core import NissanLeafCharger, ChargingTimeCalculator
 except ImportError:
-    # For when run directly or from parent directory
-    from Python Modules.leaf_core import NissanLeafCharger, ChargingTimeCalculator
+    import importlib.util
+    from pathlib import Path
+
+    core_path = Path(__file__).with_name('leaf_core.py')
+    spec = importlib.util.spec_from_file_location('leaf_core', core_path)
+    if spec is not None:
+        leaf_core = importlib.util.module_from_spec(spec)
+        if spec.loader:
+            spec.loader.exec_module(leaf_core)
+            NissanLeafCharger = leaf_core.NissanLeafCharger  # type: ignore
+            ChargingTimeCalculator = leaf_core.ChargingTimeCalculator  # type: ignore
+        else:
+            raise ImportError("Cannot load leaf_core module")
+    else:
+        raise ImportError("Cannot create spec for leaf_core module")
 
 
 class NissanLeafGUI:
@@ -30,7 +49,7 @@ class NissanLeafGUI:
         self.root.geometry('600x400')
 
         main_frame = ttk.Frame(self.root, padding='10')
-        main_frame.grid(row=0, column=0, sticky=(tk.W, tk.E, tk.N, tk.S))
+        main_frame.grid(row=0, column=0, sticky=(tk.W, tk.E, tk.N, tk.S))  # type: ignore[arg-type]
 
         # Configure grid weights to allow expansion
         self.root.columnconfigure(0, weight=1)
@@ -42,7 +61,7 @@ class NissanLeafGUI:
             main_frame, text='Calculation Start Time', padding='5'
         )
         self.time_frame.grid(
-            row=0, column=0, columnspan=2, sticky=(tk.W, tk.E), pady=5
+            row=0, column=0, columnspan=2, sticky=(tk.W, tk.E), pady=5  # type: ignore[arg-type]
         )
         self.time_frame.columnconfigure(0, weight=1)
         start_time_str = self.start_time.strftime('%Y-%m-%d %H:%M:%S')
@@ -51,7 +70,7 @@ class NissanLeafGUI:
 
         # Input fields - adjust column widths
         input_frame = ttk.Frame(main_frame)
-        input_frame.grid(row=1, column=0, columnspan=2, sticky=(tk.W, tk.E))
+        input_frame.grid(row=1, column=0, columnspan=2, sticky=(tk.W, tk.E))  # type: ignore[arg-type]
         input_frame.columnconfigure(1, weight=1)
 
         # Battery Capacity Selection
@@ -65,7 +84,7 @@ class NissanLeafGUI:
             values=list(NissanLeafCharger.BATTERY_CAPACITIES.keys()),
             width=30
         )
-        battery_combo.grid(row=0, column=1, sticky=(tk.W, tk.E), pady=5)
+        battery_combo.grid(row=0, column=1, sticky=(tk.W, tk.E), pady=5)  # type: ignore[arg-type]
         battery_combo.bind('<<ComboboxSelected>>', self.update_calculations)
 
         # Charging Rate Selection
@@ -79,7 +98,7 @@ class NissanLeafGUI:
             values=list(NissanLeafCharger.CHARGING_RATES.keys()),
             width=30
         )
-        charging_combo.grid(row=1, column=1, sticky=(tk.W, tk.E), pady=5)
+        charging_combo.grid(row=1, column=1, sticky=(tk.W, tk.E), pady=5)  # type: ignore[arg-type]
         charging_combo.bind('<<ComboboxSelected>>', self.update_calculations)
 
         # Battery Health
@@ -88,7 +107,7 @@ class NissanLeafGUI:
         )
         self.health_var = tk.StringVar(value='100')
         health_entry = ttk.Entry(input_frame, textvariable=self.health_var, width=30)
-        health_entry.grid(row=2, column=1, sticky=(tk.W, tk.E), pady=5)
+        health_entry.grid(row=2, column=1, sticky=(tk.W, tk.E), pady=5)  # type: ignore[arg-type]
         health_entry.bind('<KeyRelease>', self.validate_and_update)
 
         # Current Charge
@@ -97,7 +116,7 @@ class NissanLeafGUI:
         )
         self.current_var = tk.StringVar(value='0')
         current_entry = ttk.Entry(input_frame, textvariable=self.current_var, width=30)
-        current_entry.grid(row=3, column=1, sticky=(tk.W, tk.E), pady=5)
+        current_entry.grid(row=3, column=1, sticky=(tk.W, tk.E), pady=5)  # type: ignore[arg-type]
         current_entry.bind('<KeyRelease>', self.validate_and_update)
 
         # Results Frame
@@ -105,7 +124,7 @@ class NissanLeafGUI:
             main_frame, text='Charging Time Estimates', padding='10'
         )
         results_frame.grid(
-            row=2, column=0, columnspan=2, sticky=(tk.W, tk.E), pady=20
+            row=2, column=0, columnspan=2, sticky=(tk.W, tk.E), pady=20  # type: ignore[arg-type]
         )
         results_frame.columnconfigure(1, weight=1)
         results_frame.columnconfigure(2, weight=1)
@@ -161,7 +180,7 @@ class NissanLeafGUI:
         except ValueError:
             return 0.0
 
-    def validate_and_update(self, *args):
+    def validate_and_update(self, *args):  # pylint: disable=unused-argument
         """Validate input before updating calculations."""
         health = self.validate_number(self.health_var.get())
         if health < 0 or health > 100:
@@ -173,8 +192,9 @@ class NissanLeafGUI:
 
         self.update_calculations()
 
-    def update_calculations(self, *args):
+    def update_calculations(self, *args):  # pylint: disable=unused-argument
         """Update charging time calculations and display."""
+        self.start_time = datetime.now()
         try:
             self.charger.battery_capacity = NissanLeafCharger.BATTERY_CAPACITIES[
                 self.battery_var.get()
@@ -186,9 +206,9 @@ class NissanLeafGUI:
             self.charger.battery_health = self.validate_number(self.health_var.get())
             self.charger.current_charge = self.validate_number(self.current_var.get())
 
-            if not (0 <= self.charger.battery_health <= 100):
+            if not 0 <= self.charger.battery_health <= 100:
                 raise ValueError('Battery health must be between 0 and 100')
-            if not (0 <= self.charger.current_charge <= 100):
+            if not 0 <= self.charger.current_charge <= 100:
                 raise ValueError('Current charge must be between 0 and 100')
 
             time_80 = self.charger.calculate_charging_time(80)
@@ -212,8 +232,8 @@ class NissanLeafGUI:
                 )
             )
 
-        except Exception as e:
-            # Clear all result labels on error
+        except (ValueError, KeyError):
+            # Clear all result labels on error (invalid input or missing dictionary key)
             for label in [
                 self.time_80_label,
                 self.time_100_label,
@@ -221,12 +241,14 @@ class NissanLeafGUI:
                 self.completion_100_label
             ]:
                 label.config(text='')
+            # Optionally log the error for debugging
+            # print(f"Calculation error: {e}")
 
 
 def main():
     """Main entry point of the application."""
     root = tk.Tk()
-    app = NissanLeafGUI(root)
+    NissanLeafGUI(root)
     root.mainloop()
 
 

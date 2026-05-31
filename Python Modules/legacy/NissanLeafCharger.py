@@ -192,34 +192,6 @@ class NissanLeafGUI:
       self.time_100_label.grid(row=2, column=1, sticky=tk.W, pady=5, padx=(5, 15))
       self.completion_100_label = ttk.Label(frame, text='')
       self.completion_100_label.grid(row=2, column=2, sticky=tk.W, pady=5, padx=5)
-  def _setup_results_grid(self, frame):
-    """Set up the results display grid.
-
-    Args:
-      frame: Frame to contain the results grid
-    """
-    # Column Headers
-    headers = ['Target', 'Duration', 'Completion Time']
-    for col, header in enumerate(headers):
-      ttk.Label(frame, text=header).grid(row=0, column=col, sticky=tk.W, padx=5)
-
-    # Results Labels for 80%
-    ttk.Label(frame, text='To 80% charge:').grid(
-      row=1, column=0, sticky=tk.W, pady=5, padx=5
-    )
-    self.time_80_label = ttk.Label(frame, text='')
-    self.time_80_label.grid(row=1, column=1, sticky=tk.W, pady=5, padx=5)
-    self.completion_80_label = ttk.Label(frame, text='')
-    self.completion_80_label.grid(row=1, column=2, sticky=tk.W, pady=5, padx=5)
-
-    # Results Labels for 100%
-    ttk.Label(frame, text='To 100% charge:').grid(
-      row=2, column=0, sticky=tk.W, pady=5, padx=5
-    )
-    self.time_100_label = ttk.Label(frame, text='')
-    self.time_100_label.grid(row=2, column=1, sticky=tk.W, pady=5, padx=5)
-    self.completion_100_label = ttk.Label(frame, text='')
-    self.completion_100_label.grid(row=2, column=2, sticky=tk.W, pady=5, padx=5)
 
   def validate_number(self, value: str) -> float:
     """Validate and convert string input to float.

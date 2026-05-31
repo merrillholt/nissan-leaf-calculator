@@ -9,7 +9,7 @@
 - Code quality: `pylint "Python Modules/"`
 
 ## Code Style
-- **Indentation**: 2 spaces for NissanLeafCharger.py, 4 spaces for Leaf.py
+- **Indentation**: 4 spaces for leaf_console.py and leaf_gui.py; 2 spaces for leaf_web.py
 - **Imports**: Group in order: standard library, third-party, local modules
 - **Type hints**: Always use typing annotations (Dict, Tuple, Optional, etc.)
 - **Docstrings**: Google style docstrings with Args/Returns/Raises sections
