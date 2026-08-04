@@ -33,9 +33,10 @@ No special installation is required for basic usage. Simply clone the repository
 For development work including testing and code quality tools (uv):
 
 ```bash
-uv venv
-source .venv/bin/activate
-uv pip install -r requirements.txt
+# The venv lives outside the project: this tree is on pCloud, and sync renames
+# pyvenv.cfg to 'pyvenv [conflicted].cfg', which silently guts an in-project venv.
+uv venv --python /usr/bin/python3 ~/.venvs/pyp-nissan-leaf-calculator
+VIRTUAL_ENV=~/.venvs/pyp-nissan-leaf-calculator uv pip install -r requirements.txt
 ```
 
 ## Usage
