@@ -124,6 +124,12 @@ ignore_missing_imports = true
 # Pytest configuration
 [tool.pytest.ini_options]
 minversion = "6.0"
+# Cache outside the project: this tree is on pCloud, which syncs by filesystem
+# event and ignores .gitignore entirely. Cache files are written and rewritten
+# constantly, and an upload queued for a file that is then replaced strands the
+# task in pCloud's queue. PYTHONPYCACHEPREFIX and MYPY_CACHE_DIR do the same for
+# __pycache__ and mypy; pytest has no env var, so it is set here.
+cache_dir = "~/.cache/pytest/nissan-leaf-calculator"
 addopts = "-ra --strict-markers --strict-config --tb=short"
 testpaths = ["tests"]
 python_files = ["test_*.py", "*_test.py"]
