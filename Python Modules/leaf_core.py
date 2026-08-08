@@ -40,13 +40,25 @@ class NissanLeafCharger:
             target_percentage: Target charge percentage (0-100)
 
         Returns:
-            Float representing hours needed to reach target charge
+            Hours needed to reach the target charge. Zero if already exactly
+            at the target, and a negative value if the current charge is
+            already above it -- callers should render that via
+            ChargingTimeCalculator, which reports it as 'Already at target
+            charge'. Returns infinity if the charging rate is not positive.
 
         Raises:
-            ValueError: If target_percentage is not between 0 and 100
+            ValueError: If target_percentage is not between 0 and 100, or if
+                the charger's battery health or current charge are outside
+                their valid ranges.
         """
         if not 0 <= target_percentage <= 100:
             raise ValueError('Target percentage must be between 0 and 100')
+        if not 0 < self.battery_health <= 100:
+            raise ValueError(
+                'Battery health must be greater than 0 and at most 100'
+            )
+        if not 0 <= self.current_charge <= 100:
+            raise ValueError('Current charge must be between 0 and 100')
 
         actual_capacity = self.battery_capacity * (self.battery_health / 100)
         current_energy = actual_capacity * (self.current_charge / 100)
@@ -56,10 +68,10 @@ class NissanLeafCharger:
         if self.charging_rate <= 0:
             return float('inf')
 
-        if energy_needed <= 0:
-            return 0.0
-
-        energy_needed *= 1.1  # Add 10% for charging inefficiency
+        # Add 10% for charging inefficiency. Applied to the energy drawn, so
+        # a negative result (already past target) stays negative and is
+        # reported as such rather than being flattened to zero.
+        energy_needed *= 1.1
         return energy_needed / self.charging_rate
 
 
@@ -81,8 +93,10 @@ class ChargingTimeCalculator:
         if hours < 0:
             return 'Already at target charge'
 
-        hours_int = int(hours)
-        minutes = int((hours - hours_int) * 60)
+        # Round to the nearest minute rather than truncating, so 59.94
+        # minutes reads as '1 hour' instead of '59 minutes'. divmod carries
+        # a rounded-up 60 into the hours column.
+        hours_int, minutes = divmod(round(hours * 60), 60)
         h_unit = 'hour' if hours_int == 1 else 'hours'
         m_unit = 'minute' if minutes == 1 else 'minutes'
 
@@ -105,6 +119,9 @@ class ChargingTimeCalculator:
         """
         if hours == float('inf'):
             return 'Invalid input'
+        if hours < 0:
+            # Charging is already done; a past timestamp would be misleading.
+            return 'Already at target charge'
 
         completion_time = start_time + timedelta(hours=hours)
         return completion_time.strftime('%Y-%m-%d %H:%M:%S')

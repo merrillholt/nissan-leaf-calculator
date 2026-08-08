@@ -41,6 +41,13 @@ class NissanLeafGUI:
         self.root = root
         self.charger = NissanLeafCharger()
         self.start_time = datetime.now()
+        # Result widgets are built by _setup_results_grid; declared here so
+        # the full set of instance attributes is visible in one place.
+        self.time_80_label: ttk.Label
+        self.time_100_label: ttk.Label
+        self.completion_80_label: ttk.Label
+        self.completion_100_label: ttk.Label
+        self.error_label: ttk.Label
         self.setup_gui()
 
     def setup_gui(self):
@@ -78,28 +85,30 @@ class NissanLeafGUI:
             row=0, column=0, sticky=tk.W, pady=5, padx=(0, 10)
         )
         self.battery_var = tk.StringVar(value='40 kWh')
-        battery_combo = ttk.Combobox(
+        self.battery_combo = ttk.Combobox(
             input_frame,
             textvariable=self.battery_var,
             values=list(NissanLeafCharger.BATTERY_CAPACITIES.keys()),
-            width=30
+            width=30,
+            state='readonly'
         )
-        battery_combo.grid(row=0, column=1, sticky=(tk.W, tk.E), pady=5)
-        battery_combo.bind('<<ComboboxSelected>>', self.update_calculations)
+        self.battery_combo.grid(row=0, column=1, sticky=(tk.W, tk.E), pady=5)
+        self.battery_combo.bind('<<ComboboxSelected>>', self.update_calculations)
 
         # Charging Rate Selection
         ttk.Label(input_frame, text='Charging Rate:').grid(
             row=1, column=0, sticky=tk.W, pady=5, padx=(0, 10)
         )
         self.charging_var = tk.StringVar(value='Level 2 (240V) 6.6kW')
-        charging_combo = ttk.Combobox(
+        self.charging_combo = ttk.Combobox(
             input_frame,
             textvariable=self.charging_var,
             values=list(NissanLeafCharger.CHARGING_RATES.keys()),
-            width=30
+            width=30,
+            state='readonly'
         )
-        charging_combo.grid(row=1, column=1, sticky=(tk.W, tk.E), pady=5)
-        charging_combo.bind('<<ComboboxSelected>>', self.update_calculations)
+        self.charging_combo.grid(row=1, column=1, sticky=(tk.W, tk.E), pady=5)
+        self.charging_combo.bind('<<ComboboxSelected>>', self.update_calculations)
 
         # Battery Health
         ttk.Label(input_frame, text='Battery Health (%):').grid(
@@ -163,6 +172,12 @@ class NissanLeafGUI:
         self.completion_100_label = ttk.Label(frame, text='')
         self.completion_100_label.grid(row=2, column=2, sticky=tk.W, pady=5, padx=5)
 
+        # Error line, shown only when a calculation cannot be performed.
+        self.error_label = ttk.Label(frame, text='', foreground='red')
+        self.error_label.grid(
+            row=3, column=0, columnspan=3, sticky=tk.W, pady=(10, 0), padx=5
+        )
+
     def validate_number(self, value: str) -> float:
         """Validate and convert string input to float.
 
@@ -206,11 +221,8 @@ class NissanLeafGUI:
             self.charger.battery_health = self.validate_number(self.health_var.get())
             self.charger.current_charge = self.validate_number(self.current_var.get())
 
-            if not 0 <= self.charger.battery_health <= 100:
-                raise ValueError('Battery health must be between 0 and 100')
-            if not 0 <= self.charger.current_charge <= 100:
-                raise ValueError('Current charge must be between 0 and 100')
-
+            # Range checks live in NissanLeafCharger.calculate_charging_time;
+            # any violation arrives here as a ValueError.
             time_80 = self.charger.calculate_charging_time(80)
             time_100 = self.charger.calculate_charging_time(100)
 
@@ -231,9 +243,11 @@ class NissanLeafGUI:
                     self.start_time, time_100
                 )
             )
+            self.error_label.config(text='')
 
-        except (ValueError, KeyError):
-            # Clear all result labels on error (invalid input or missing dictionary key)
+        except (ValueError, KeyError) as exc:
+            # Blank the results and say why, rather than leaving the user
+            # staring at four empty labels with no explanation.
             for label in [
                 self.time_80_label,
                 self.time_100_label,
@@ -241,8 +255,7 @@ class NissanLeafGUI:
                 self.completion_100_label
             ]:
                 label.config(text='')
-            # Optionally log the error for debugging
-            # print(f"Calculation error: {e}")
+            self.error_label.config(text=str(exc).strip("'"))
 
 
 def main():

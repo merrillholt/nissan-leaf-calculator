@@ -15,7 +15,7 @@ A Python application that calculates charging times for a Nissan Leaf electric v
   - 10% charging inefficiency factor
 - Provides estimates for both 80% and 100% charging targets
 - Available with GUI, console, or web interface
-- Comprehensive test suite with 84+ tests
+- Comprehensive test suite with 98 tests
 
 ## Requirements
 
@@ -79,18 +79,18 @@ python "Python Modules/leaf_web.py"
 - **Current charge**: 25%
 - **Target**: 80%
 - **Rate**: 6.6kW (Level 2)
-- **Result**: ~3.1 hours to complete
+- **Result**: 3 hours 18 minutes to complete
 
 ### Workplace Top-up Scenario
 - **Battery**: 62 kWh at 95% health
 - **Current charge**: 60%
 - **Target**: 100%
 - **Rate**: 3.3kW (Level 2)
-- **Result**: ~7.9 hours to complete
+- **Result**: 7 hours 51 minutes to complete
 
 ## Testing
 
-The project includes a comprehensive test suite with 84+ tests covering:
+The project includes a comprehensive test suite with 98 tests covering:
 
 ### Run All Tests
 ```bash

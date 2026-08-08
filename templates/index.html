@@ -129,7 +129,7 @@
           min="0"
           max="100"
           step="0.1"
-          value="{{ form_data.battery_health if form_data.battery_health else '100' }}"
+          value="{{ form_data.get('battery_health', '100') }}"
           required
         >
       </fieldset>
@@ -152,7 +152,7 @@
           min="0"
           max="100"
           step="0.1"
-          value="{{ form_data.current_charge if form_data.current_charge else '0' }}"
+          value="{{ form_data.get('current_charge', '0') }}"
           required
         >
       </fieldset>

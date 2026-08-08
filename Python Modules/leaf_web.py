@@ -8,7 +8,7 @@ mobile-friendly, touch-optimized interface.
 import os
 import sys
 from datetime import datetime
-from typing import Dict, Optional, Tuple
+from typing import Dict, Mapping, Optional, Tuple
 
 from flask import Flask, render_template, request, jsonify
 
@@ -64,12 +64,13 @@ def validate_form_input(
       )
     cleaned['battery_capacity'] = battery_capacity
 
-    # Validate battery health
+    # Validate battery health. Zero is rejected rather than treated as a
+    # 0 kWh pack, which would otherwise report '0 minutes' to full charge.
     battery_health = float(form_data.get('battery_health', 0))
-    if not 0 <= battery_health <= 100:
+    if not 0 < battery_health <= 100:
       return (
         False,
-        'Battery health must be between 0 and 100%',
+        'Battery health must be greater than 0 and at most 100%',
         {}
       )
     cleaned['battery_health'] = battery_health
@@ -162,7 +163,7 @@ def index():
   """
   results = None
   error = None
-  form_data = {}
+  form_data: Mapping[str, str] = {}
 
   if request.method == 'POST':
     # Validate inputs
@@ -170,18 +171,17 @@ def index():
       request.form
     )
 
+    # Always echo back exactly what the user submitted, so the repopulated
+    # form shows '90' rather than the parsed '90.0'.
+    form_data = request.form
+
     if is_valid:
       try:
-        # Perform calculation
         results = perform_calculation(cleaned_data)
-        # Preserve form data for display
-        form_data = cleaned_data
       except ValueError as e:
         error = f'Calculation error: {str(e)}'
-        form_data = request.form
     else:
       error = error_msg
-      form_data = request.form
 
   return render_template(
     'index.html',
@@ -209,7 +209,9 @@ def calculate():
     results = perform_calculation(cleaned_data)
     return jsonify(results), 200
   except ValueError as e:
-    return jsonify({'error': f'Calculation error: {str(e)}'}), 500
+    # The calculator only raises ValueError for out-of-range inputs, so this
+    # is a bad request, not a server fault.
+    return jsonify({'error': f'Calculation error: {str(e)}'}), 400
 
 
 if __name__ == '__main__':

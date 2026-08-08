@@ -85,10 +85,48 @@ class TestNissanLeafCharger:
         assert result == 0
 
     def test_calculate_charging_time_lower_than_current(self):
-        """Test charging time when target is lower than current charge."""
+        """Target below current charge returns a negative duration.
+
+        The value is deliberately not clamped to zero so that callers can
+        distinguish 'already past the target' from 'exactly at the target'.
+        """
         self.charger.current_charge = 80
         result = self.charger.calculate_charging_time(50)
-        assert result == 0
+        assert result < 0
+
+    def test_already_past_target_is_reported_not_flattened(self):
+        """A target below current charge surfaces as a message, not 0 minutes."""
+        self.charger.current_charge = 90
+        hours = self.charger.calculate_charging_time(80)
+        assert ChargingTimeCalculator.format_time(hours) == \
+            'Already at target charge'
+        assert ChargingTimeCalculator.calculate_completion_time(
+            datetime(2023, 1, 1, 10, 0, 0), hours
+        ) == 'Already at target charge'
+
+    def test_calculate_charging_time_zero_health_raises(self):
+        """Zero battery health is rejected rather than reporting 0 minutes."""
+        self.charger.battery_health = 0
+        with pytest.raises(ValueError, match='Battery health must be'):
+            self.charger.calculate_charging_time(100)
+
+    def test_calculate_charging_time_negative_health_raises(self):
+        """Negative battery health raises ValueError."""
+        self.charger.battery_health = -5
+        with pytest.raises(ValueError, match='Battery health must be'):
+            self.charger.calculate_charging_time(100)
+
+    def test_calculate_charging_time_health_above_100_raises(self):
+        """Battery health above 100% raises ValueError."""
+        self.charger.battery_health = 101
+        with pytest.raises(ValueError, match='Battery health must be'):
+            self.charger.calculate_charging_time(100)
+
+    def test_calculate_charging_time_invalid_current_charge_raises(self):
+        """Current charge outside 0-100 raises ValueError."""
+        self.charger.current_charge = 150
+        with pytest.raises(ValueError, match='Current charge must be'):
+            self.charger.calculate_charging_time(100)
 
     def test_calculate_charging_time_zero_rate(self):
         """Test charging time with zero charging rate."""
@@ -183,6 +221,16 @@ class TestChargingTimeCalculator:
         """Test that minutes are properly rounded."""
         result = ChargingTimeCalculator.format_time(1.99)  # 1 hour 59.4 minutes
         assert result == "1 hour 59 minutes"
+
+    def test_format_time_rounds_up_rather_than_truncating(self):
+        """59.94 minutes reads as 1 hour, not 59 minutes."""
+        result = ChargingTimeCalculator.format_time(0.999)
+        assert result == "1 hour"
+
+    def test_format_time_rounding_carries_into_hours(self):
+        """A minute value that rounds to 60 carries into the hours column."""
+        result = ChargingTimeCalculator.format_time(2.9999)
+        assert result == "3 hours"
 
     def test_calculate_completion_time_normal(self):
         """Test completion time calculation."""

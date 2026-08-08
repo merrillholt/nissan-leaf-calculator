@@ -151,6 +151,29 @@ class TestInputValidation:
     assert response.status_code == 200
     assert b'Error:' in response.data
 
+  def test_battery_health_zero_rejected(self, client):
+    """Zero battery health is rejected, not reported as '0 minutes'."""
+    response = client.post('/', data={
+      'battery_capacity': '40',
+      'battery_health': '0',  # Invalid: a 0 kWh pack
+      'charging_rate': '6.6',
+      'current_charge': '0'
+    })
+    assert response.status_code == 200
+    assert b'Error:' in response.data
+    assert b'0 minutes' not in response.data
+
+  def test_battery_health_zero_preserved_in_form(self, client):
+    """A submitted health of 0 is echoed back, not silently reset to 100."""
+    response = client.post('/', data={
+      'battery_capacity': '40',
+      'battery_health': '0',
+      'charging_rate': '6.6',
+      'current_charge': '0'
+    })
+    assert b'id="battery_health"' in response.data
+    assert b'value="100"' not in response.data
+
   def test_invalid_charging_rate(self, client):
     """Test POST with invalid charging rate."""
     response = client.post('/', data={
@@ -238,6 +261,21 @@ class TestAjaxEndpoint:
     })
     assert response.status_code == 200
     assert response.content_type == 'application/json'
+
+  def test_calculate_endpoint_already_at_target(self, client):
+    """Charging past the 80% target reports it instead of a past timestamp."""
+    response = client.post('/calculate', data={
+      'battery_capacity': '40',
+      'battery_health': '100',
+      'charging_rate': '6.6',
+      'current_charge': '90'
+    })
+    assert response.status_code == 200
+    data = response.get_json()
+    assert data['duration_80'] == 'Already at target charge'
+    assert data['completion_80'] == 'Already at target charge'
+    # The 100% target is still ahead, so it gets a real estimate.
+    assert data['duration_100'] != 'Already at target charge'
 
 
 class TestFormStatePreservation:

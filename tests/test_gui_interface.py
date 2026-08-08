@@ -135,3 +135,42 @@ class TestNissanLeafGUI:
             self.gui.update_calculations()
         except KeyError:
             pass  # Expected behavior for invalid battery selection
+
+    def test_comboboxes_are_readonly(self):
+        """Selection widgets reject typed input.
+
+        An editable combobox lets the user type a value that is not a key in
+        CHARGING_RATES/BATTERY_CAPACITIES, which used to raise KeyError and
+        silently blank every result label.
+        """
+        assert str(self.gui.battery_combo.cget('state')) == 'readonly'
+        assert str(self.gui.charging_combo.cget('state')) == 'readonly'
+
+    def test_error_is_shown_not_just_blanked(self):
+        """An unusable input explains itself instead of blanking silently."""
+        self.gui.health_var.set("0")
+        self.gui.update_calculations()
+
+        assert self.gui.time_80_label.cget('text') == ''
+        assert 'Battery health' in self.gui.error_label.cget('text')
+
+    def test_error_clears_on_recovery(self):
+        """The error line disappears once the input is valid again."""
+        self.gui.health_var.set("0")
+        self.gui.update_calculations()
+        assert self.gui.error_label.cget('text') != ''
+
+        self.gui.health_var.set("100")
+        self.gui.update_calculations()
+        assert self.gui.error_label.cget('text') == ''
+        assert self.gui.time_80_label.cget('text') != ''
+
+    def test_already_at_target_shown_in_results(self):
+        """Charging past 80% reports that, rather than '0 minutes'."""
+        self.gui.current_var.set("90")
+        self.gui.update_calculations()
+
+        assert self.gui.time_80_label.cget('text') == 'Already at target charge'
+        assert self.gui.completion_80_label.cget('text') == \
+            'Already at target charge'
+        assert self.gui.time_100_label.cget('text') != 'Already at target charge'
