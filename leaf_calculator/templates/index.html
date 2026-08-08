@@ -130,8 +130,8 @@
 
         <label for="battery_capacity">Battery Capacity</label>
         <select id="battery_capacity" name="battery_capacity" required>
-          <option value="40" {% if not form_data or form_data.battery_capacity == '40' or form_data.battery_capacity == 40.0 %}selected{% endif %}>40 kWh</option>
-          <option value="62" {% if form_data.battery_capacity == '62' or form_data.battery_capacity == 62.0 %}selected{% endif %}>62 kWh</option>
+          <option value="40" {% if form_data.get('battery_capacity', '40') == '40' %}selected{% endif %}>40 kWh</option>
+          <option value="62" {% if form_data.get('battery_capacity') == '62' %}selected{% endif %}>62 kWh</option>
         </select>
 
         <label for="battery_health">Battery Health (%)</label>
@@ -152,9 +152,9 @@
 
         <label for="charging_rate">Charging Rate</label>
         <select id="charging_rate" name="charging_rate" required>
-          <option value="1.4" {% if form_data.charging_rate == '1.4' or form_data.charging_rate == 1.4 %}selected{% endif %}>Level 1 (120V) - 1.4 kW</option>
-          <option value="3.3" {% if form_data.charging_rate == '3.3' or form_data.charging_rate == 3.3 %}selected{% endif %}>Level 2 (240V) - 3.3 kW</option>
-          <option value="6.6" {% if not form_data or form_data.charging_rate == '6.6' or form_data.charging_rate == 6.6 %}selected{% endif %}>Level 2 (240V) - 6.6 kW</option>
+          <option value="1.4" {% if form_data.get('charging_rate') == '1.4' %}selected{% endif %}>Level 1 (120V) - 1.4 kW</option>
+          <option value="3.3" {% if form_data.get('charging_rate') == '3.3' %}selected{% endif %}>Level 2 (240V) - 3.3 kW</option>
+          <option value="6.6" {% if form_data.get('charging_rate', '6.6') == '6.6' %}selected{% endif %}>Level 2 (240V) - 6.6 kW</option>
         </select>
 
         <label for="current_charge">Current Charge (%)</label>
@@ -188,7 +188,7 @@
             type="checkbox"
             name="model_taper"
             value="on"
-            {% if not form_data or form_data.getlist('model_taper')[-1:] != ['off'] %}checked{% endif %}
+            {% if taper_checked %}checked{% endif %}
           >
           Model charge taper (charging slows as the pack fills)
         </label>

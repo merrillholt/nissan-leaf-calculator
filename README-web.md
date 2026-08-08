@@ -100,7 +100,10 @@ python3 -m leaf_calculator.leaf_web
 
    Anything you change below overrides the preset.
 2. **Battery Capacity**: Select 40 kWh or 62 kWh
-3. **Battery Health**: Enter percentage (above 0, up to 100%)
+3. **Battery Health**: Enter percentage (above 0, up to 100%). This is
+   remembered between sessions, so the form comes back pre-filled with
+   whatever you last submitted — the same value the console, GUI and command
+   line use.
 4. **Charging Rate**: Select charging level:
    - Level 1 (120V): 1.4 kW
    - Level 2 (240V): 3.3 kW or 6.6 kW

@@ -21,6 +21,7 @@ from .leaf_core import (
   validate_current_charge,
   validate_target_percentage,
 )
+from .settings import load_battery_health, remember_battery_health
 
 # templates/ and static/ sit inside this package, which is where Flask looks
 # by default -- so they resolve correctly whether the app runs from a source
@@ -152,6 +153,25 @@ def build_charger(cleaned_data: Dict) -> NissanLeafCharger:
   return charger
 
 
+def default_form_values() -> Dict[str, str]:
+  """Values used to populate a form that has not been submitted yet.
+
+  Every field is listed so the template can select defaults uniformly with
+  .get(), whether it is rendering a fresh form or echoing a submission.
+
+  Returns:
+    Mapping of field name to string value, seeded with the remembered
+    battery health.
+  """
+  return {
+    'battery_capacity': '40',
+    'battery_health': f'{load_battery_health():g}',
+    'charging_rate': '6.6',
+    'current_charge': '0',
+    'targets': ', '.join(f'{t:g}' for t in DEFAULT_TARGETS),
+  }
+
+
 def perform_calculation(cleaned_data: Dict) -> Dict:
   """Execute calculation and format results.
 
@@ -211,8 +231,10 @@ def index():
   results = None
   error = None
   form_data: Mapping[str, str] = {}
+  taper_checked = True
 
   if request.method == 'POST':
+    taper_checked = read_taper_flag(request.form)
     is_valid, error_msg, cleaned_data = validate_form_input(request.form)
 
     # Always echo back exactly what the user submitted, so the repopulated
@@ -222,16 +244,24 @@ def index():
     if is_valid:
       try:
         results = perform_calculation(cleaned_data)
+        # A successful submission is a deliberate statement about the car,
+        # so remember the health for next time.
+        problem = remember_battery_health(cleaned_data['battery_health'])
+        if problem:
+          error = problem
       except ValueError as e:
         error = f'Calculation error: {str(e)}'
     else:
       error = error_msg
+  else:
+    form_data = default_form_values()
 
   return render_template(
     'index.html',
     results=results,
     error=error,
     form_data=form_data,
+    taper_checked=taper_checked,
     presets=list(PRESETS.values()),
     default_targets=', '.join(f'{t:g}' for t in DEFAULT_TARGETS)
   )

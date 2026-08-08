@@ -16,8 +16,9 @@ A Python application that calculates charging times for a Nissan Leaf electric v
   - The charge taper — the BMS slows charging as the pack fills
 - Reports any number of charge targets (80% and 100% by default)
 - Scenario presets for the two common cases: home overnight and workplace top-up
+- Remembers your battery health between runs, shared across all interfaces
 - Available with GUI, console, web, or one-shot command-line output
-- Comprehensive test suite with 171 tests
+- Comprehensive test suite with 203 tests
 
 ## Requirements
 
@@ -87,6 +88,7 @@ python main.py --current 20 --no-taper
 | `--target`, `-t` | Target percentage; repeat for several targets |
 | `--preset`, `-p` | Scenario preset: `home` or `work` |
 | `--no-taper` | Assume a constant rate instead of modelling the taper |
+| `--no-save` | Do not remember `--health` from this run |
 
 Combine a charge parameter with an interface flag to pre-populate that
 interface instead of printing a report:
@@ -95,6 +97,33 @@ interface instead of printing a report:
 python main.py --console --preset home --current 30
 python main.py --gui --battery 62 --current 45
 ```
+
+### Remembered battery health
+
+Battery health is a property of your particular car that changes slowly over
+years, so it is stored once and reused. Setting it anywhere — the `--health`
+flag, the console menu, the GUI field, or a web form submission — saves it, and
+every interface reads the same value on the next run.
+
+The setting lives in your user config directory, deliberately outside the
+project tree:
+
+```
+${XDG_CONFIG_HOME:-~/.config}/nissan-leaf-calculator/config.json
+```
+
+Set `LEAF_CALCULATOR_CONFIG` to override that path entirely.
+
+For a one-off "what if my pack were worse" query, add `--no-save` so the stored
+value is left alone:
+
+```bash
+python main.py --health 50 --current 20 --no-save
+```
+
+A missing, unreadable or hand-corrupted config file falls back to 100% rather
+than failing, and a config directory that cannot be written to produces a
+warning rather than an error.
 
 ### Scenario presets
 
@@ -169,7 +198,7 @@ relative imports, so running them as standalone scripts will not resolve.
 
 ## Testing
 
-The project includes a comprehensive test suite with 171 tests covering:
+The project includes a comprehensive test suite with 203 tests covering:
 
 ### Run All Tests
 ```bash
@@ -218,6 +247,7 @@ pylint leaf_calculator/
 - `leaf_calculator/` - The application package
   - `cli.py` - Command-line argument handling, presets and one-shot reports
   - `leaf_core.py` - Calculation logic, shared validators, presets, taper model
+  - `settings.py` - Persistent user settings (remembered battery health)
   - `leaf_gui.py` - GUI interface using tkinter
   - `leaf_console.py` - Console interface
   - `leaf_web.py` - Flask web interface (mobile-friendly, optimized for iSH on iOS)
@@ -227,6 +257,8 @@ pylint leaf_calculator/
 - `tests/` - Comprehensive test suite
   - `test_leaf_core.py` - Core calculation, validator, preset and taper tests
   - `test_cli.py` - Command-line flag and preset tests
+  - `test_settings.py` - Settings persistence tests
+  - `conftest.py` - Redirects the settings file to a temp path for all tests
   - `test_gui_interface.py` - GUI interface tests
   - `test_console_interface.py` - Console interface tests
   - `test_leaf_web.py` - Web interface tests

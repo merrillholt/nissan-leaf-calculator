@@ -19,6 +19,7 @@ from .leaf_core import (
     validate_battery_health,
     validate_target_percentage,
 )
+from .settings import load_battery_health, remember_battery_health
 
 # Flags that describe the charge itself rather than which interface to run.
 CHARGE_OPTIONS = ('battery', 'health', 'current', 'target', 'preset')
@@ -98,7 +99,8 @@ def build_parser() -> argparse.ArgumentParser:
         '--health',
         type=_arg_type(validate_battery_health, 'percentage'),
         metavar='PCT',
-        help='Battery health percentage, above 0 and up to 100'
+        help='Battery health percentage, above 0 and up to 100. '
+             'Remembered for future runs unless --no-save is given.'
     )
     charge.add_argument(
         '--current',
@@ -134,6 +136,12 @@ def build_parser() -> argparse.ArgumentParser:
         )).replace('%', '%%')
     )
     charge.add_argument(
+        '--no-save',
+        action='store_true',
+        help='Do not remember --health from this run, for one-off '
+             'what-if queries'
+    )
+    charge.add_argument(
         '--no-taper',
         action='store_true',
         help='Assume a constant charging rate instead of modelling the '
@@ -156,6 +164,8 @@ def configure_charger(args: argparse.Namespace) -> NissanLeafCharger:
     """
     charger = NissanLeafCharger()
     charger.model_taper = not args.no_taper
+    # Start from the remembered health so it applies to every interface.
+    charger.battery_health = load_battery_health()
 
     if args.preset:
         charger.apply_preset(args.preset)
@@ -164,6 +174,10 @@ def configure_charger(args: argparse.Namespace) -> NissanLeafCharger:
         charger.battery_capacity = args.battery
     if args.health is not None:
         charger.battery_health = args.health
+        if not args.no_save:
+            problem = remember_battery_health(args.health)
+            if problem:
+                print(f'Warning: {problem}')
     if args.current is not None:
         charger.current_charge = args.current
     if args.rate is not None:

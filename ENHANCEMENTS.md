@@ -4,7 +4,8 @@
 
 1. **Output reports**: Allow exporting a summary of inputs and computed finish times to text or CSV for record keeping.
 2. **Configurable inefficiency factor**: Surface the 10% energy overhead as a user-adjustable setting to account for charger efficiency differences. It is currently the class constant `NissanLeafCharger.INEFFICIENCY_FACTOR`, so the plumbing exists — it just is not exposed in any interface.
-3. **More scenario presets**: Only `home` and `work` exist. A road-trip / DC fast-charge preset would need CHAdeMO support in `CHARGING_RATES` first, along with a much steeper taper curve than the AC one.
+3. **Persist more settings**: Only battery health is stored. Battery capacity is also a fixed property of the car and would be the natural next addition; `settings.py` already handles arbitrary keys.
+4. **More scenario presets**: Only `home` and `work` exist. A road-trip / DC fast-charge preset would need CHAdeMO support in `CHARGING_RATES` first, along with a much steeper taper curve than the AC one.
 
 ## Done
 
@@ -12,4 +13,5 @@
 - **Shared validation helpers** — the validators live in `leaf_core.py` and are used by all four front ends. Range and choice checks are now defined exactly once.
 - **Scenario presets** — `home` (6.6 kW to 80%) and `work` (3.3 kW to 100%), in `leaf_core.PRESETS`. Selectable from the command line, console menu, GUI dropdown and web form. Presets set rate and target only; battery capacity, health and current charge describe the car, not the scenario.
 - **Charge taper modeling** — `NissanLeafCharger` models the BMS slowdown as a linear rate decline from `TAPER_START_PERCENT` (80%) to `TAPER_END_RATE_FRACTION` (25%) at 100%, integrated logarithmically. On by default; `--no-taper` or the interface toggles restore the constant-rate behaviour. Targets at or below 80% are unaffected.
-- **Automated tests** — 171 tests across core, CLI, console, GUI, web and integration.
+- **Persistent battery health** — remembered in `settings.py` between runs and shared by every interface; `--no-save` opts out for one-off queries.
+- **Automated tests** — 203 tests across core, CLI, console, GUI, web and integration.

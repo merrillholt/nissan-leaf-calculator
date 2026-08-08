@@ -22,6 +22,16 @@ Targets are a list on the charger (`charger.targets`), defaulting to
 `DEFAULT_TARGETS` (80% and 100%). Any interface may set any number of them,
 so never assume exactly two result rows.
 
+## Persistence
+`settings.py` stores user preferences as JSON under
+`${XDG_CONFIG_HOME:-~/.config}/nissan-leaf-calculator/config.json`, overridable
+with `LEAF_CALCULATOR_CONFIG`. Only battery health is persisted today. Writes
+are atomic (temp file plus `os.replace`) and every operation is best-effort — a
+corrupt or unwritable config must never break the calculator.
+
+Tests must never touch the real config: `tests/conftest.py` has an autouse
+fixture redirecting `LEAF_CALCULATOR_CONFIG` to a temp path. Keep it autouse.
+
 ## Layout
 The application package is `leaf_calculator/`, with `templates/` and `static/`
 inside it so Flask's defaults resolve them in both a source checkout and an

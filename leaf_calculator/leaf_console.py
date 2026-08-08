@@ -16,6 +16,7 @@ from .leaf_core import (
     validate_current_charge,
     validate_target_percentage,
 )
+from .settings import load_battery_health, remember_battery_health
 
 
 class ConsoleInterface:
@@ -166,9 +167,7 @@ class ConsoleInterface:
                 'battery_capacity'),
             '2': lambda: self._pick(
                 charging_rates, 'Select Charging Rate', 'charging_rate'),
-            '3': lambda: self._prompt(
-                'Enter battery health percentage (0-100): ',
-                validate_battery_health, 'battery_health'),
+            '3': self._set_battery_health,
             '4': lambda: self._prompt(
                 'Enter current charge percentage (0-100): ',
                 validate_current_charge, 'current_charge'),
@@ -227,6 +226,23 @@ class ConsoleInterface:
         if value is not None:
             setattr(self.charger, attribute, value)
 
+    def _set_battery_health(self):
+        """Prompt for battery health and remember it for future runs."""
+        health = self.get_valid_number(
+            'Enter battery health percentage (0-100): ',
+            validate_battery_health
+        )
+        if health is None:
+            return
+
+        self.charger.battery_health = health
+        problem = remember_battery_health(health)
+        if problem:
+            print(f'Warning: {problem}')
+        else:
+            print(f'Battery health set to {health:g}% and remembered '
+                  'for future runs')
+
     def _reset_start_time(self):
         """Reset the reference time used for completion estimates."""
         self.start_time = datetime.now()
@@ -236,7 +252,9 @@ class ConsoleInterface:
 
 def main():
     """Main entry point of the application."""
-    console = ConsoleInterface()
+    charger = NissanLeafCharger()
+    charger.battery_health = load_battery_health()
+    console = ConsoleInterface(charger)
     console.run()
 
 

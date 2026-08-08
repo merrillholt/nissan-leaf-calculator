@@ -17,6 +17,7 @@ from .leaf_core import (
     validate_current_charge,
     validate_target_percentage,
 )
+from .settings import load_battery_health, remember_battery_health
 
 NO_PRESET = 'Custom'
 
@@ -160,12 +161,18 @@ class NissanLeafGUI:
         ttk.Label(input_frame, text='Battery Health (%):').grid(
             row=3, column=0, sticky=tk.W, pady=5, padx=(0, 10)
         )
-        self.health_var = tk.StringVar(value='100')
+        self.health_var = tk.StringVar(
+            value=f'{self.charger.battery_health:g}'
+        )
         health_entry = ttk.Entry(
             input_frame, textvariable=self.health_var, width=30
         )
         health_entry.grid(row=3, column=1, sticky=(tk.W, tk.E), pady=5)
         health_entry.bind('<KeyRelease>', self.validate_and_update)
+        # Persist on commit rather than per keystroke, so typing '85' does
+        # not first store the intermediate '8'.
+        health_entry.bind('<FocusOut>', self.remember_health)
+        health_entry.bind('<Return>', self.remember_health)
 
         # Current Charge
         ttk.Label(input_frame, text='Current Charge (%):').grid(
@@ -273,6 +280,17 @@ class NissanLeafGUI:
         """Validate input before updating calculations."""
         self.update_calculations()
 
+    def remember_health(self, *args):  # pylint: disable=unused-argument
+        """Persist the battery health once the user commits the field."""
+        try:
+            health = validate_battery_health(self.health_var.get().strip())
+        except ValueError:
+            # Already surfaced by update_calculations; nothing to store.
+            return
+        problem = remember_battery_health(health)
+        if problem:
+            self.error_label.config(text=problem)
+
     def _sync_charger_from_form(self):
         """Copy the form values onto the charger.
 
@@ -336,8 +354,10 @@ class NissanLeafGUI:
 
 def main():
     """Main entry point of the application."""
+    charger = NissanLeafCharger()
+    charger.battery_health = load_battery_health()
     root = tk.Tk()
-    NissanLeafGUI(root)
+    NissanLeafGUI(root, charger)
     root.mainloop()
 
 
