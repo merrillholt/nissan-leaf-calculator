@@ -13,9 +13,11 @@ A Python application that calculates charging times for a Nissan Leaf electric v
   - Battery health percentage (degradation over time)
   - Current charge level
   - 10% charging inefficiency factor
-- Provides estimates for both 80% and 100% charging targets
-- Available with GUI, console, or web interface
-- Comprehensive test suite with 100 tests
+  - The charge taper — the BMS slows charging as the pack fills
+- Reports any number of charge targets (80% and 100% by default)
+- Scenario presets for the two common cases: home overnight and workplace top-up
+- Available with GUI, console, web, or one-shot command-line output
+- Comprehensive test suite with 171 tests
 
 ## Requirements
 
@@ -57,6 +59,79 @@ python main.py --console
 python main.py --web
 ```
 
+### One-shot estimates (no prompts)
+
+Supplying any charge parameter prints an estimate and exits, so the calculator
+can be scripted or used as a quick lookup:
+
+```bash
+# A specific charge, to a specific target
+python main.py --battery 40 --health 90 --current 25 --target 80
+
+# Several targets at once
+python main.py --current 20 -t 50 -t 80 -t 100
+
+# Pick the charging rate explicitly
+python main.py --current 20 --rate 1.4
+
+# Ignore the charge taper (constant-rate estimate)
+python main.py --current 20 --no-taper
+```
+
+| Flag | Meaning |
+| --- | --- |
+| `--battery`, `-b` | Battery capacity in kWh: 40 or 62 |
+| `--health` | Battery health percentage, above 0 and up to 100 |
+| `--current` | Current charge percentage, 0 to 100 |
+| `--rate`, `-r` | Charging rate in kW: 1.4, 3.3 or 6.6 |
+| `--target`, `-t` | Target percentage; repeat for several targets |
+| `--preset`, `-p` | Scenario preset: `home` or `work` |
+| `--no-taper` | Assume a constant rate instead of modelling the taper |
+
+Combine a charge parameter with an interface flag to pre-populate that
+interface instead of printing a report:
+
+```bash
+python main.py --console --preset home --current 30
+python main.py --gui --battery 62 --current 45
+```
+
+### Scenario presets
+
+Presets fill in the charging rate and target for a common situation. They
+describe the *scenario*, not the car, so battery capacity, health and current
+charge are left alone. Anything you set explicitly overrides the preset.
+
+| Preset | Rate | Target |
+| --- | --- | --- |
+| `home` — Home overnight | 6.6 kW (Level 2) | 80% |
+| `work` — Workplace top-up | 3.3 kW (Level 2) | 100% |
+
+```bash
+python main.py --preset home --current 30
+python main.py --preset work --battery 62 --health 95 --current 60
+```
+
+Both are also selectable from the console menu, the GUI dropdown and the web
+form.
+
+### Charge taper
+
+A real Leaf's battery management system reduces current as the pack fills, so
+the last stretch to 100% takes disproportionately longer. The calculator models
+this as a linear decline from the full rate at 80% state of charge to 25% of it
+at 100%, which tracks observed Leaf AC charging far better than assuming a
+constant rate.
+
+Targets at or below 80% are unaffected. Pass `--no-taper` (or untick the box in
+the GUI and web form) for the older constant-rate behaviour — for a 40 kWh pack
+charging 0→100% at 6.6 kW that is the difference between 7 hours 48 minutes and
+6 hours 40 minutes.
+
+The taper curve is a simplification: the real one also depends on temperature
+and on whether the supply can saturate the pack at all, which Level 1 rarely
+can.
+
 ### Running Directly
 
 You can also run the individual interfaces directly:
@@ -89,11 +164,12 @@ relative imports, so running them as standalone scripts will not resolve.
 - **Current charge**: 60%
 - **Target**: 100%
 - **Rate**: 3.3kW (Level 2)
-- **Result**: 7 hours 51 minutes to complete
+- **Result**: 11 hours 11 minutes to complete (7 hours 51 minutes with `--no-taper`;
+  this target runs well past the 80% taper threshold)
 
 ## Testing
 
-The project includes a comprehensive test suite with 100 tests covering:
+The project includes a comprehensive test suite with 171 tests covering:
 
 ### Run All Tests
 ```bash
@@ -140,8 +216,8 @@ pylint leaf_calculator/
 
 - `main.py` - Thin wrapper so the app runs from a source checkout
 - `leaf_calculator/` - The application package
-  - `cli.py` - Command-line argument handling and interface selection
-  - `leaf_core.py` - Core calculation logic and utilities
+  - `cli.py` - Command-line argument handling, presets and one-shot reports
+  - `leaf_core.py` - Calculation logic, shared validators, presets, taper model
   - `leaf_gui.py` - GUI interface using tkinter
   - `leaf_console.py` - Console interface
   - `leaf_web.py` - Flask web interface (mobile-friendly, optimized for iSH on iOS)
@@ -149,7 +225,8 @@ pylint leaf_calculator/
   - `static/` - CSS and JavaScript for the web interface
 - `legacy/` - Original implementations, kept for reference only
 - `tests/` - Comprehensive test suite
-  - `test_leaf_core.py` - Core calculation tests
+  - `test_leaf_core.py` - Core calculation, validator, preset and taper tests
+  - `test_cli.py` - Command-line flag and preset tests
   - `test_gui_interface.py` - GUI interface tests
   - `test_console_interface.py` - Console interface tests
   - `test_leaf_web.py` - Web interface tests
@@ -163,7 +240,9 @@ pylint leaf_calculator/
 
 The application follows a modular architecture:
 
-1. **Core Logic** (`leaf_core.py`): Pure calculation functions, no UI dependencies
+1. **Core Logic** (`leaf_core.py`): Pure calculation functions plus the input
+   validators, scenario presets and result formatting every front end shares —
+   no UI dependencies
 2. **Interfaces**: Separate GUI, console, and web implementations that all use the core logic
 3. **Main Entry Point**: Command-line argument parsing and interface selection (`--gui`, `--console`, `--web`)
 4. **Comprehensive Testing**: Unit, integration, and interface tests

@@ -92,20 +92,56 @@
       form.parentNode.insertBefore(newStartTime, form.nextSibling);
     }
 
-    // Update table data
-    const rows = resultsSection.querySelectorAll('tbody tr');
-    if (rows.length >= 2) {
-      // Update 80% row
-      rows[0].cells[1].textContent = data.duration_80;
-      rows[0].cells[2].textContent = data.completion_80;
-
-      // Update 100% row
-      rows[1].cells[1].textContent = data.duration_100;
-      rows[1].cells[2].textContent = data.completion_100;
+    // Rebuild the table body: the number of targets is user-configurable,
+    // so the row count is not fixed at two.
+    const tbody = resultsSection.querySelector('tbody');
+    if (tbody) {
+      tbody.textContent = '';
+      (data.results || []).forEach(function(row) {
+        const tr = document.createElement('tr');
+        [formatTarget(row.target) + '% charge', row.duration, row.completion]
+          .forEach(function(value) {
+            const td = document.createElement('td');
+            td.textContent = value;
+            tr.appendChild(td);
+          });
+        tbody.appendChild(tr);
+      });
     }
+
+    updateTaperNote(resultsSection, data.model_taper);
 
     // Show results section with animation
     resultsSection.style.display = 'block';
+  }
+
+  /**
+   * Trim trailing zeros from a target percentage for display
+   * @param {number} target - Target percentage
+   * @returns {string} Display string
+   */
+  function formatTarget(target) {
+    return String(Number(target));
+  }
+
+  /**
+   * Show or hide the note warning that taper is not modelled
+   * @param {HTMLElement} section - Results section
+   * @param {boolean} modelTaper - Whether taper was modelled
+   */
+  function updateTaperNote(section, modelTaper) {
+    let note = section.querySelector('.hint');
+    if (modelTaper === false) {
+      if (!note) {
+        note = document.createElement('p');
+        note.className = 'hint';
+        section.appendChild(note);
+      }
+      note.textContent = 'Charge taper not modelled — estimates near ' +
+        '100% will run optimistic.';
+    } else if (note) {
+      note.remove();
+    }
   }
 
   /**
@@ -125,18 +161,7 @@
             <th>Completion Time</th>
           </tr>
         </thead>
-        <tbody>
-          <tr>
-            <td>80% charge</td>
-            <td></td>
-            <td></td>
-          </tr>
-          <tr>
-            <td>100% charge</td>
-            <td></td>
-            <td></td>
-          </tr>
-        </tbody>
+        <tbody></tbody>
       </table>
     `;
     return section;

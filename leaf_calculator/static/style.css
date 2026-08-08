@@ -56,6 +56,36 @@ input[type="number"] {
   -moz-appearance: textfield;
 }
 
+/* Helper text under a field */
+.hint {
+  font-size: 0.85rem;
+  color: #5a6472;
+  margin: 0.25rem 0 0.75rem;
+}
+
+.hint code {
+  background: rgba(0, 0, 0, 0.06);
+  padding: 0.05rem 0.3rem;
+  border-radius: 3px;
+}
+
+/* Checkbox rows read as a single tap target on mobile */
+label.checkbox {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-weight: normal;
+  margin-top: 0.5rem;
+  cursor: pointer;
+}
+
+label.checkbox input[type="checkbox"] {
+  width: auto;
+  min-height: 1.15rem;
+  min-width: 1.15rem;
+  margin: 0;
+}
+
 /* Results Section */
 .results {
   background: white;

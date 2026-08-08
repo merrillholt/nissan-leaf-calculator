@@ -11,6 +11,17 @@
 - Type checking: `mypy leaf_calculator/`
 - Code quality: `pylint leaf_calculator/`
 
+## Shared behaviour
+`leaf_core.py` owns everything the four front ends must agree on: the input
+validators (`validate_battery_health`, `validate_target_percentage`, …), the
+`PRESETS` table, the charge-taper model, and `summarize()`, which builds the
+per-target result rows. Front ends should call these rather than re-implement
+range checks — that duplication was the original bug source.
+
+Targets are a list on the charger (`charger.targets`), defaulting to
+`DEFAULT_TARGETS` (80% and 100%). Any interface may set any number of them,
+so never assume exactly two result rows.
+
 ## Layout
 The application package is `leaf_calculator/`, with `templates/` and `static/`
 inside it so Flask's defaults resolve them in both a source checkout and an

@@ -7,35 +7,56 @@ Nissan Leaf charging times with real-time updates.
 import tkinter as tk
 from tkinter import ttk
 from datetime import datetime
+from typing import List, Optional
 
-from .leaf_core import NissanLeafCharger, ChargingTimeCalculator
+from .leaf_core import (
+    PRESETS,
+    NissanLeafCharger,
+    summarize,
+    validate_battery_health,
+    validate_current_charge,
+    validate_target_percentage,
+)
+
+NO_PRESET = 'Custom'
 
 
 class NissanLeafGUI:
     """GUI class for the Nissan Leaf Charging Calculator."""
 
-    def __init__(self, root):
+    def __init__(self, root, charger: Optional[NissanLeafCharger] = None):
         """Initialize the GUI.
 
         Args:
             root: tkinter root window
+            charger: Pre-configured calculator, e.g. one built from
+                command-line flags. A default one is created if omitted.
         """
         self.root = root
-        self.charger = NissanLeafCharger()
+        self.charger = charger if charger is not None else NissanLeafCharger()
         self.start_time = datetime.now()
-        # Result widgets are built by _setup_results_grid; declared here so
-        # the full set of instance attributes is visible in one place.
-        self.time_80_label: ttk.Label
-        self.time_100_label: ttk.Label
-        self.completion_80_label: ttk.Label
-        self.completion_100_label: ttk.Label
+        # Widgets are built by setup_gui; declared here so the full set of
+        # instance attributes is visible in one place.
+        self.results_frame: ttk.LabelFrame
         self.error_label: ttk.Label
+        self.start_time_label: ttk.Label
+        self.preset_var: tk.StringVar
+        self.battery_var: tk.StringVar
+        self.charging_var: tk.StringVar
+        self.health_var: tk.StringVar
+        self.current_var: tk.StringVar
+        self.targets_var: tk.StringVar
+        self.taper_var: tk.BooleanVar
+        self.preset_combo: ttk.Combobox
+        self.battery_combo: ttk.Combobox
+        self.charging_combo: ttk.Combobox
+        self.result_rows: List[ttk.Label] = []
         self.setup_gui()
 
     def setup_gui(self):
         """Set up the GUI elements."""
         self.root.title('Nissan Leaf Charging Calculator')
-        self.root.geometry('600x400')
+        self.root.geometry('640x520')
 
         main_frame = ttk.Frame(self.root, padding='10')
         main_frame.grid(row=0, column=0, sticky=(tk.W, tk.E, tk.N, tk.S))
@@ -61,10 +82,51 @@ class NissanLeafGUI:
         input_frame = ttk.Frame(main_frame)
         input_frame.grid(row=1, column=0, columnspan=2, sticky=(tk.W, tk.E))
         input_frame.columnconfigure(1, weight=1)
+        self._setup_input_fields(input_frame)
+
+        # Results Frame
+        self.results_frame = ttk.LabelFrame(
+            main_frame, text='Charging Time Estimates', padding='10'
+        )
+        self.results_frame.grid(
+            row=2, column=0, columnspan=2, sticky=(tk.W, tk.E), pady=20
+        )
+        self.results_frame.columnconfigure(1, weight=1)
+        self.results_frame.columnconfigure(2, weight=1)
+
+        self.error_label = ttk.Label(main_frame, text='', foreground='red')
+        self.error_label.grid(
+            row=3, column=0, columnspan=2, sticky=tk.W, pady=(0, 5)
+        )
+
+        self._sync_charger_from_form()
+        self._rebuild_results_grid()
+        self.update_calculations()
+
+    def _setup_input_fields(self, input_frame):
+        """Build the input widgets.
+
+        Args:
+            input_frame: Frame that holds the labelled inputs.
+        """
+        # Scenario Preset Selection
+        ttk.Label(input_frame, text='Scenario:').grid(
+            row=0, column=0, sticky=tk.W, pady=5, padx=(0, 10)
+        )
+        self.preset_var = tk.StringVar(value=NO_PRESET)
+        self.preset_combo = ttk.Combobox(
+            input_frame,
+            textvariable=self.preset_var,
+            values=[NO_PRESET] + [p.label for p in PRESETS.values()],
+            width=30,
+            state='readonly'
+        )
+        self.preset_combo.grid(row=0, column=1, sticky=(tk.W, tk.E), pady=5)
+        self.preset_combo.bind('<<ComboboxSelected>>', self.apply_preset)
 
         # Battery Capacity Selection
         ttk.Label(input_frame, text='Battery Capacity:').grid(
-            row=0, column=0, sticky=tk.W, pady=5, padx=(0, 10)
+            row=1, column=0, sticky=tk.W, pady=5, padx=(0, 10)
         )
         self.battery_var = tk.StringVar(value='40 kWh')
         self.battery_combo = ttk.Combobox(
@@ -74,12 +136,12 @@ class NissanLeafGUI:
             width=30,
             state='readonly'
         )
-        self.battery_combo.grid(row=0, column=1, sticky=(tk.W, tk.E), pady=5)
+        self.battery_combo.grid(row=1, column=1, sticky=(tk.W, tk.E), pady=5)
         self.battery_combo.bind('<<ComboboxSelected>>', self.update_calculations)
 
         # Charging Rate Selection
         ttk.Label(input_frame, text='Charging Rate:').grid(
-            row=1, column=0, sticky=tk.W, pady=5, padx=(0, 10)
+            row=2, column=0, sticky=tk.W, pady=5, padx=(0, 10)
         )
         self.charging_var = tk.StringVar(value='Level 2 (240V) 6.6kW')
         self.charging_combo = ttk.Combobox(
@@ -89,155 +151,187 @@ class NissanLeafGUI:
             width=30,
             state='readonly'
         )
-        self.charging_combo.grid(row=1, column=1, sticky=(tk.W, tk.E), pady=5)
-        self.charging_combo.bind('<<ComboboxSelected>>', self.update_calculations)
+        self.charging_combo.grid(row=2, column=1, sticky=(tk.W, tk.E), pady=5)
+        self.charging_combo.bind(
+            '<<ComboboxSelected>>', self.on_manual_change
+        )
 
         # Battery Health
         ttk.Label(input_frame, text='Battery Health (%):').grid(
-            row=2, column=0, sticky=tk.W, pady=5, padx=(0, 10)
+            row=3, column=0, sticky=tk.W, pady=5, padx=(0, 10)
         )
         self.health_var = tk.StringVar(value='100')
-        health_entry = ttk.Entry(input_frame, textvariable=self.health_var, width=30)
-        health_entry.grid(row=2, column=1, sticky=(tk.W, tk.E), pady=5)
+        health_entry = ttk.Entry(
+            input_frame, textvariable=self.health_var, width=30
+        )
+        health_entry.grid(row=3, column=1, sticky=(tk.W, tk.E), pady=5)
         health_entry.bind('<KeyRelease>', self.validate_and_update)
 
         # Current Charge
         ttk.Label(input_frame, text='Current Charge (%):').grid(
-            row=3, column=0, sticky=tk.W, pady=5, padx=(0, 10)
+            row=4, column=0, sticky=tk.W, pady=5, padx=(0, 10)
         )
         self.current_var = tk.StringVar(value='0')
-        current_entry = ttk.Entry(input_frame, textvariable=self.current_var, width=30)
-        current_entry.grid(row=3, column=1, sticky=(tk.W, tk.E), pady=5)
+        current_entry = ttk.Entry(
+            input_frame, textvariable=self.current_var, width=30
+        )
+        current_entry.grid(row=4, column=1, sticky=(tk.W, tk.E), pady=5)
         current_entry.bind('<KeyRelease>', self.validate_and_update)
 
-        # Results Frame
-        results_frame = ttk.LabelFrame(
-            main_frame, text='Charging Time Estimates', padding='10'
+        # Target charge levels
+        ttk.Label(input_frame, text='Targets (%):').grid(
+            row=5, column=0, sticky=tk.W, pady=5, padx=(0, 10)
         )
-        results_frame.grid(
-            row=2, column=0, columnspan=2, sticky=(tk.W, tk.E), pady=20
+        self.targets_var = tk.StringVar(
+            value=', '.join(f'{t:g}' for t in self.charger.targets)
         )
-        results_frame.columnconfigure(1, weight=1)
-        results_frame.columnconfigure(2, weight=1)
+        targets_entry = ttk.Entry(
+            input_frame, textvariable=self.targets_var, width=30
+        )
+        targets_entry.grid(row=5, column=1, sticky=(tk.W, tk.E), pady=5)
+        targets_entry.bind('<KeyRelease>', self.on_manual_change)
 
-        self._setup_results_grid(results_frame)
-        self.update_calculations()
+        # Charge taper toggle
+        self.taper_var = tk.BooleanVar(value=self.charger.model_taper)
+        taper_check = ttk.Checkbutton(
+            input_frame,
+            text='Model charge taper (slower as the pack fills)',
+            variable=self.taper_var,
+            command=self.update_calculations
+        )
+        taper_check.grid(
+            row=6, column=0, columnspan=2, sticky=tk.W, pady=(5, 0)
+        )
 
-    def _setup_results_grid(self, frame):
-        """Set up the results display grid.
+    def _rebuild_results_grid(self):
+        """Rebuild the results rows to match the configured targets."""
+        for widget in self.results_frame.winfo_children():
+            widget.destroy()
+        self.result_rows = []
 
-        Args:
-            frame: Frame to contain the results grid
-        """
-        # Column Headers with consistent spacing
         headers = ['Target', 'Duration', 'Completion Time']
         for col, header in enumerate(headers):
-            ttk.Label(frame, text=header).grid(
+            ttk.Label(self.results_frame, text=header).grid(
                 row=0, column=col, sticky=tk.W, padx=(5, 15)
             )
 
-        # Results Labels for 80%
-        ttk.Label(frame, text='To 80% charge:').grid(
-            row=1, column=0, sticky=tk.W, pady=5, padx=(5, 15)
+        for index, target in enumerate(self.charger.targets, start=1):
+            ttk.Label(
+                self.results_frame, text=f'To {target:g}% charge:'
+            ).grid(row=index, column=0, sticky=tk.W, pady=5, padx=(5, 15))
+
+            duration = ttk.Label(self.results_frame, text='')
+            duration.grid(
+                row=index, column=1, sticky=tk.W, pady=5, padx=(5, 15)
+            )
+            completion = ttk.Label(self.results_frame, text='')
+            completion.grid(row=index, column=2, sticky=tk.W, pady=5, padx=5)
+            self.result_rows.append(duration)
+            self.result_rows.append(completion)
+
+    def apply_preset(self, *args):  # pylint: disable=unused-argument
+        """Apply the selected scenario preset to the form."""
+        label = self.preset_var.get()
+        preset = next(
+            (p for p in PRESETS.values() if p.label == label), None
         )
-        self.time_80_label = ttk.Label(frame, text='')
-        self.time_80_label.grid(row=1, column=1, sticky=tk.W, pady=5, padx=(5, 15))
-        self.completion_80_label = ttk.Label(frame, text='')
-        self.completion_80_label.grid(row=1, column=2, sticky=tk.W, pady=5, padx=5)
+        if preset is None:
+            return
 
-        # Results Labels for 100%
-        ttk.Label(frame, text='To 100% charge:').grid(
-            row=2, column=0, sticky=tk.W, pady=5, padx=(5, 15)
+        rate_name = next(
+            name for name, value in NissanLeafCharger.CHARGING_RATES.items()
+            if value == preset.charging_rate
         )
-        self.time_100_label = ttk.Label(frame, text='')
-        self.time_100_label.grid(row=2, column=1, sticky=tk.W, pady=5, padx=(5, 15))
-        self.completion_100_label = ttk.Label(frame, text='')
-        self.completion_100_label.grid(row=2, column=2, sticky=tk.W, pady=5, padx=5)
+        self.charging_var.set(rate_name)
+        self.targets_var.set(f'{preset.target:g}')
+        self.update_calculations()
 
-        # Error line, shown only when a calculation cannot be performed.
-        self.error_label = ttk.Label(frame, text='', foreground='red')
-        self.error_label.grid(
-            row=3, column=0, columnspan=3, sticky=tk.W, pady=(10, 0), padx=5
-        )
+    def on_manual_change(self, *args):  # pylint: disable=unused-argument
+        """Drop the preset label when the user edits its fields directly."""
+        self.preset_var.set(NO_PRESET)
+        self.update_calculations()
 
-    def validate_number(self, value: str) -> float:
-        """Validate and convert string input to float.
-
-        Args:
-            value: String value to validate
+    def parse_targets(self) -> List[float]:
+        """Parse the targets entry into a list of percentages.
 
         Returns:
-            Float value, or 0.0 if invalid
-        """
-        if not value.strip():
-            return 0.0
+            Validated target percentages.
 
-        try:
-            return float(value.strip())
-        except ValueError:
-            return 0.0
+        Raises:
+            ValueError: If any entry is not a valid percentage, or the field
+                is empty.
+        """
+        raw = self.targets_var.get().strip()
+        if not raw:
+            raise ValueError('Enter at least one target percentage')
+        return [
+            validate_target_percentage(part)
+            for part in raw.split(',') if part.strip()
+        ]
 
     def validate_and_update(self, *args):  # pylint: disable=unused-argument
         """Validate input before updating calculations."""
-        health = self.validate_number(self.health_var.get())
-        if health < 0 or health > 100:
-            self.health_var.set('100')
-
-        current = self.validate_number(self.current_var.get())
-        if current < 0 or current > 100:
-            self.current_var.set('0')
-
         self.update_calculations()
+
+    def _sync_charger_from_form(self):
+        """Copy the form values onto the charger.
+
+        Raises:
+            ValueError: If any field is invalid.
+            KeyError: If a dropdown holds an unknown key.
+        """
+        self.charger.battery_capacity = NissanLeafCharger.BATTERY_CAPACITIES[
+            self.battery_var.get()
+        ]
+        self.charger.charging_rate = NissanLeafCharger.CHARGING_RATES[
+            self.charging_var.get()
+        ]
+        self.charger.battery_health = validate_battery_health(
+            self.health_var.get().strip()
+        )
+        self.charger.current_charge = validate_current_charge(
+            self.current_var.get().strip()
+        )
+        self.charger.model_taper = self.taper_var.get()
+        self.charger.targets = self.parse_targets()
 
     def update_calculations(self, *args):  # pylint: disable=unused-argument
         """Update charging time calculations and display."""
         self.start_time = datetime.now()
+        self.start_time_label.config(
+            text=self.start_time.strftime('%Y-%m-%d %H:%M:%S')
+        )
+
+        previous_targets = list(self.charger.targets)
         try:
-            self.charger.battery_capacity = NissanLeafCharger.BATTERY_CAPACITIES[
-                self.battery_var.get()
-            ]
-            self.charger.charging_rate = NissanLeafCharger.CHARGING_RATES[
-                self.charging_var.get()
-            ]
-
-            self.charger.battery_health = self.validate_number(self.health_var.get())
-            self.charger.current_charge = self.validate_number(self.current_var.get())
-
-            # Range checks live in NissanLeafCharger.calculate_charging_time;
-            # any violation arrives here as a ValueError.
-            time_80 = self.charger.calculate_charging_time(80)
-            time_100 = self.charger.calculate_charging_time(100)
-
-            self.time_80_label.config(
-                text=ChargingTimeCalculator.format_time(time_80)
-            )
-            self.time_100_label.config(
-                text=ChargingTimeCalculator.format_time(time_100)
-            )
-
-            self.completion_80_label.config(
-                text=ChargingTimeCalculator.calculate_completion_time(
-                    self.start_time, time_80
-                )
-            )
-            self.completion_100_label.config(
-                text=ChargingTimeCalculator.calculate_completion_time(
-                    self.start_time, time_100
-                )
-            )
-            self.error_label.config(text='')
-
+            self._sync_charger_from_form()
         except (ValueError, KeyError) as exc:
-            # Blank the results and say why, rather than leaving the user
-            # staring at four empty labels with no explanation.
-            for label in [
-                self.time_80_label,
-                self.time_100_label,
-                self.completion_80_label,
-                self.completion_100_label
-            ]:
-                label.config(text='')
-            self.error_label.config(text=str(exc).strip("'"))
+            self._show_error(str(exc).strip("'"))
+            return
+
+        if self.charger.targets != previous_targets:
+            self._rebuild_results_grid()
+
+        rows = summarize(self.charger, self.start_time)
+        errors = [row['error'] for row in rows if 'error' in row]
+        if errors:
+            self._show_error(str(errors[0]))
+            return
+
+        for index, row in enumerate(rows):
+            self.result_rows[index * 2].config(text=row['duration'])
+            self.result_rows[index * 2 + 1].config(text=row['completion'])
+        self.error_label.config(text='')
+
+    def _show_error(self, message: str):
+        """Blank the results and explain why they could not be computed.
+
+        Args:
+            message: Text shown to the user.
+        """
+        for label in self.result_rows:
+            label.config(text='')
+        self.error_label.config(text=message)
 
 
 def main():

@@ -5,28 +5,41 @@ Nissan Leaf charging times with interactive menus.
 """
 
 from datetime import datetime
-from typing import Mapping, Optional, Tuple, Union
+from typing import Callable, Mapping, Optional, Tuple, Union
 
-from .leaf_core import NissanLeafCharger, ChargingTimeCalculator
+from .leaf_core import (
+    DEFAULT_TARGETS,
+    PRESETS,
+    NissanLeafCharger,
+    summarize,
+    validate_battery_health,
+    validate_current_charge,
+    validate_target_percentage,
+)
 
 
 class ConsoleInterface:
     """Console interface for the Nissan Leaf Charging Calculator."""
 
-    def __init__(self):
-        """Initialize the console interface."""
-        self.charger = NissanLeafCharger()
+    def __init__(self, charger: Optional[NissanLeafCharger] = None):
+        """Initialize the console interface.
+
+        Args:
+            charger: Pre-configured calculator, e.g. one built from
+                command-line flags. A default one is created if omitted.
+        """
+        self.charger = charger if charger is not None else NissanLeafCharger()
         self.start_time = datetime.now()
 
     def get_valid_number(
-            self, prompt: str, min_val: float, max_val: float
+            self, prompt: str, validator: Callable[[object], float]
     ) -> Optional[float]:
         """Get a valid number input from the user.
 
         Args:
             prompt: The prompt to display to the user
-            min_val: Minimum acceptable value
-            max_val: Maximum acceptable value
+            validator: Shared validator from leaf_core that returns the
+                parsed value or raises ValueError with a usable message
 
         Returns:
             Float value or None if user wants to quit
@@ -37,17 +50,13 @@ class ConsoleInterface:
                 return None
 
             try:
-                num = float(value)
-                if min_val <= num <= max_val:
-                    return num
-                print(
-                    f'Please enter a number between {min_val} and {max_val}'
-                )
-            except ValueError:
-                print('Please enter a valid number')
+                return validator(value)
+            except ValueError as exc:
+                print(exc)
 
     def display_menu(
-            self, options: Mapping[str, Tuple[str, Union[int, float]]], title: str
+            self, options: Mapping[str, Tuple[str, Union[int, float, str]]],
+            title: str
     ) -> str:
         """Display a menu and get user selection.
 
@@ -77,18 +86,61 @@ class ConsoleInterface:
         print(f'Start time: {self.start_time.strftime("%Y-%m-%d %H:%M:%S")}')
         print('-' * 50)
 
-        for target in [80, 100]:
-            try:
-                hours = self.charger.calculate_charging_time(target)
-                duration = ChargingTimeCalculator.format_time(hours)
-                completion = ChargingTimeCalculator.calculate_completion_time(
-                    self.start_time, hours
-                )
-                print(f'\nTo {target}% charge:')
-                print(f'Duration: {duration}')
-                print(f'Completion time: {completion}')
-            except ValueError as e:
-                print(f'\nError calculating {target}% charge: {e}')
+        for row in summarize(self.charger, self.start_time):
+            print(f'\nTo {row["target"]:g}% charge:')
+            if 'error' in row:
+                print(f'Error: {row["error"]}')
+                continue
+            print(f'Duration: {row["duration"]}')
+            print(f'Completion time: {row["completion"]}')
+
+    def _targets_summary(self) -> str:
+        """Return the configured targets as a readable string."""
+        return ', '.join(f'{target:g}%' for target in self.charger.targets)
+
+    def _choose_preset(self):
+        """Prompt for a scenario preset and apply it."""
+        presets = {
+            str(index + 1): (f'{preset.label} -- {preset.description}',
+                             preset.key)
+            for index, preset in enumerate(PRESETS.values())
+        }
+        choice = self.display_menu(presets, 'Select Scenario Preset')
+        if choice == 'q':
+            return
+        preset = self.charger.apply_preset(presets[choice][1])
+        print(f'\nApplied "{preset.label}": '
+              f'{preset.charging_rate:g} kW to {preset.target:g}%')
+
+    def _set_targets(self):
+        """Prompt for the target charge levels to report."""
+        print(f'\nCurrent targets: {self._targets_summary()}')
+        print('Enter targets separated by commas, blank for the default '
+              f'({", ".join(f"{t:g}%" for t in DEFAULT_TARGETS)}), '
+              'or q to cancel.')
+        raw = input('Targets: ').strip().lower()
+        if raw == 'q':
+            return
+        if not raw:
+            self.charger.targets = list(DEFAULT_TARGETS)
+            print(f'Targets reset to {self._targets_summary()}')
+            return
+
+        try:
+            targets = [
+                validate_target_percentage(part)
+                for part in raw.split(',') if part.strip()
+            ]
+        except ValueError as exc:
+            print(exc)
+            return
+
+        if not targets:
+            print('No targets entered')
+            return
+
+        self.charger.targets = targets
+        print(f'Targets set to {self._targets_summary()}')
 
     def run(self):
         """Run the main console interface loop."""
@@ -101,83 +153,85 @@ class ConsoleInterface:
         # Convert battery capacities to format expected by display_menu
         battery_capacities = {
             str(i+1): (name, capacity)
-            for i, (name, capacity) in enumerate(self.charger.BATTERY_CAPACITIES.items())
+            for i, (name, capacity) in enumerate(
+                self.charger.BATTERY_CAPACITIES.items())
         }
 
         print('Nissan Leaf Charging Calculator')
         print('Enter "q" at any prompt to return to the main menu')
 
+        actions = {
+            '1': lambda: self._pick(
+                battery_capacities, 'Select Battery Capacity',
+                'battery_capacity'),
+            '2': lambda: self._pick(
+                charging_rates, 'Select Charging Rate', 'charging_rate'),
+            '3': lambda: self._prompt(
+                'Enter battery health percentage (0-100): ',
+                validate_battery_health, 'battery_health'),
+            '4': lambda: self._prompt(
+                'Enter current charge percentage (0-100): ',
+                validate_current_charge, 'current_charge'),
+            '5': self._choose_preset,
+            '6': self._set_targets,
+            '7': self.display_results,
+            '8': self._reset_start_time,
+        }
+
         while True:
-            print('\nCurrent Settings:')
-            print('-' * 50)
-            print(f'Battery Capacity: {self.charger.battery_capacity} kWh')
-            print(f'Charging Rate: {self.charger.charging_rate} kW')
-            print(f'Battery Health: {self.charger.battery_health}%')
-            print(f'Current Charge: {self.charger.current_charge}%')
-            print('-' * 50)
-
-            print('\nOptions:')
-            print('1. Set Battery Capacity')
-            print('2. Set Charging Rate')
-            print('3. Set Battery Health')
-            print('4. Set Current Charge')
-            print('5. Calculate Charging Times')
-            print('6. Reset Start Time')
-            print('q. Quit')
-
+            self._print_settings()
             choice = input('\nEnter your choice: ').strip().lower()
 
             if choice == 'q':
                 break
 
-            if choice == '1':
-                battery_choice = self.display_menu(
-                    battery_capacities,
-                    'Select Battery Capacity'
-                )
-                if battery_choice != 'q':
-                    self.charger.battery_capacity = battery_capacities[
-                        battery_choice][1]
-
-            elif choice == '2':
-                rate_choice = self.display_menu(
-                    charging_rates,
-                    'Select Charging Rate'
-                )
-                if rate_choice != 'q':
-                    self.charger.charging_rate = charging_rates[
-                        rate_choice][1]
-
-            elif choice == '3':
-                health = self.get_valid_number(
-                    'Enter battery health percentage (0-100): ',
-                    0,
-                    100
-                )
-                if health is not None:
-                    self.charger.battery_health = health
-
-            elif choice == '4':
-                charge = self.get_valid_number(
-                    'Enter current charge percentage (0-100): ',
-                    0,
-                    100
-                )
-                if charge is not None:
-                    self.charger.current_charge = charge
-
-            elif choice == '5':
-                self.display_results()
-
-            elif choice == '6':
-                self.start_time = datetime.now()
-                print(f'\nStart time reset to: '
-                      f'{self.start_time.strftime("%Y-%m-%d %H:%M:%S")}')
-
-            else:
+            action = actions.get(choice)
+            if action is None:
                 print('Invalid choice, please try again')
+            else:
+                action()
 
         print('\nThank you for using the Nissan Leaf Charging Calculator!')
+
+    def _print_settings(self):
+        """Print the current settings and the main menu."""
+        print('\nCurrent Settings:')
+        print('-' * 50)
+        print(f'Battery Capacity: {self.charger.battery_capacity:g} kWh')
+        print(f'Charging Rate: {self.charger.charging_rate:g} kW')
+        print(f'Battery Health: {self.charger.battery_health:g}%')
+        print(f'Current Charge: {self.charger.current_charge:g}%')
+        print(f'Targets: {self._targets_summary()}')
+        print('-' * 50)
+
+        print('\nOptions:')
+        print('1. Set Battery Capacity')
+        print('2. Set Charging Rate')
+        print('3. Set Battery Health')
+        print('4. Set Current Charge')
+        print('5. Apply Scenario Preset')
+        print('6. Set Target Charge Levels')
+        print('7. Calculate Charging Times')
+        print('8. Reset Start Time')
+        print('q. Quit')
+
+    def _pick(self, options, title, attribute):
+        """Show a menu and assign the chosen value to a charger attribute."""
+        choice = self.display_menu(options, title)
+        if choice != 'q':
+            setattr(self.charger, attribute, options[choice][1])
+
+    def _prompt(self, prompt, validator, attribute):
+        """Prompt for a validated number and assign it to the charger."""
+        value = self.get_valid_number(prompt, validator)
+        if value is not None:
+            setattr(self.charger, attribute, value)
+
+    def _reset_start_time(self):
+        """Reset the reference time used for completion estimates."""
+        self.start_time = datetime.now()
+        print(f'\nStart time reset to: '
+              f'{self.start_time.strftime("%Y-%m-%d %H:%M:%S")}')
 
 
 def main():

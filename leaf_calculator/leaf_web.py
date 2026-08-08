@@ -6,11 +6,21 @@ mobile-friendly, touch-optimized interface.
 """
 
 from datetime import datetime
-from typing import Dict, Mapping, Optional, Tuple
+from typing import Dict, List, Mapping, Optional, Tuple
 
 from flask import Flask, render_template, request, jsonify
 
-from .leaf_core import NissanLeafCharger, ChargingTimeCalculator
+from .leaf_core import (
+  DEFAULT_TARGETS,
+  PRESETS,
+  NissanLeafCharger,
+  summarize,
+  validate_battery_capacity,
+  validate_battery_health,
+  validate_charging_rate,
+  validate_current_charge,
+  validate_target_percentage,
+)
 
 # templates/ and static/ sit inside this package, which is where Flask looks
 # by default -- so they resolve correctly whether the app runs from a source
@@ -18,10 +28,62 @@ from .leaf_core import NissanLeafCharger, ChargingTimeCalculator
 app = Flask(__name__)
 
 
+def parse_targets(raw: Optional[str]) -> List[float]:
+  """Parse a comma-separated list of target percentages.
+
+  Args:
+    raw: Raw form value; blank or missing yields the defaults.
+
+  Returns:
+    Validated target percentages.
+
+  Raises:
+    ValueError: If any entry is not a valid percentage.
+  """
+  if not raw or not raw.strip():
+    return list(DEFAULT_TARGETS)
+
+  targets = [
+    validate_target_percentage(part)
+    for part in raw.split(',') if part.strip()
+  ]
+  if not targets:
+    return list(DEFAULT_TARGETS)
+  return targets
+
+
+def read_taper_flag(form_data: Mapping[str, str]) -> bool:
+  """Read the charge-taper toggle from submitted form data.
+
+  The form pairs a hidden 'off' field with the checkbox so that unchecking
+  it submits something rather than nothing; the last value wins. Callers
+  that omit the field entirely (the JSON clients) get the default, which is
+  to model the taper.
+
+  Args:
+    form_data: Submitted form values.
+
+  Returns:
+    True if the taper should be modelled.
+  """
+  if hasattr(form_data, 'getlist'):
+    values = form_data.getlist('model_taper')
+  else:
+    raw = form_data.get('model_taper')
+    values = [raw] if raw is not None else []
+
+  if not values:
+    return True
+  return bool(values[-1] != 'off')
+
+
 def validate_form_input(
-  form_data: Dict
+  form_data: Mapping[str, str]
 ) -> Tuple[bool, Optional[str], Dict]:
   """Validate all form inputs.
+
+  Delegates every range and choice check to the shared validators in
+  leaf_core, so the web form accepts exactly what the other front ends do.
 
   Args:
     form_data: Dictionary containing form field values.
@@ -35,54 +97,59 @@ def validate_form_input(
   Raises:
     None: All errors returned as part of the tuple.
   """
-  cleaned = {}
+  preset_key = (form_data.get('preset') or '').strip().lower()
 
   try:
-    # Validate battery capacity
-    battery_capacity = float(form_data.get('battery_capacity', 0))
-    if battery_capacity not in NissanLeafCharger.BATTERY_CAPACITIES.values():
-      return (
-        False,
-        'Battery capacity must be 40 or 62 kWh',
-        {}
-      )
-    cleaned['battery_capacity'] = battery_capacity
+    cleaned = {
+      'battery_capacity': validate_battery_capacity(
+        form_data.get('battery_capacity', '')
+      ),
+      'battery_health': validate_battery_health(
+        form_data.get('battery_health', '')
+      ),
+      'charging_rate': validate_charging_rate(
+        form_data.get('charging_rate', '')
+      ),
+      'current_charge': validate_current_charge(
+        form_data.get('current_charge', '')
+      ),
+      'targets': parse_targets(form_data.get('targets')),
+      'model_taper': read_taper_flag(form_data),
+      'preset': preset_key,
+    }
+  except ValueError as exc:
+    return (False, str(exc), {})
 
-    # Validate battery health. Zero is rejected rather than treated as a
-    # 0 kWh pack, which would otherwise report '0 minutes' to full charge.
-    battery_health = float(form_data.get('battery_health', 0))
-    if not 0 < battery_health <= 100:
-      return (
-        False,
-        'Battery health must be greater than 0 and at most 100%',
-        {}
-      )
-    cleaned['battery_health'] = battery_health
+  if preset_key and preset_key not in PRESETS:
+    options = ', '.join(sorted(PRESETS))
+    return (False, f'Preset must be one of: {options}', {})
 
-    # Validate charging rate
-    charging_rate = float(form_data.get('charging_rate', 0))
-    if charging_rate not in NissanLeafCharger.CHARGING_RATES.values():
-      return (
-        False,
-        'Charging rate must be 1.4, 3.3, or 6.6 kW',
-        {}
-      )
-    cleaned['charging_rate'] = charging_rate
+  return (True, None, cleaned)
 
-    # Validate current charge
-    current_charge = float(form_data.get('current_charge', 0))
-    if not 0 <= current_charge <= 100:
-      return (
-        False,
-        'Current charge must be between 0 and 100%',
-        {}
-      )
-    cleaned['current_charge'] = current_charge
 
-    return (True, None, cleaned)
+def build_charger(cleaned_data: Dict) -> NissanLeafCharger:
+  """Build a charger from validated form data.
 
-  except (ValueError, TypeError) as e:
-    return (False, f'Invalid input: {str(e)}', {})
+  The preset is applied first so explicit form fields win over it, matching
+  how the command line resolves the same conflict.
+
+  Args:
+    cleaned_data: Dictionary with validated input values.
+
+  Returns:
+    A configured NissanLeafCharger.
+  """
+  charger = NissanLeafCharger()
+  if cleaned_data.get('preset'):
+    charger.apply_preset(cleaned_data['preset'])
+
+  charger.battery_capacity = cleaned_data['battery_capacity']
+  charger.battery_health = cleaned_data['battery_health']
+  charger.charging_rate = cleaned_data['charging_rate']
+  charger.current_charge = cleaned_data['current_charge']
+  charger.model_taper = cleaned_data['model_taper']
+  charger.targets = cleaned_data['targets']
+  return charger
 
 
 def perform_calculation(cleaned_data: Dict) -> Dict:
@@ -94,44 +161,40 @@ def perform_calculation(cleaned_data: Dict) -> Dict:
   Returns:
     Dictionary containing:
       - start_time: Calculation timestamp
-      - duration_80: Formatted time to 80% charge
-      - completion_80: Datetime when 80% charge completes
-      - duration_100: Formatted time to 100% charge
-      - completion_100: Datetime when 100% charge completes
+      - results: One entry per target, each with target, duration and
+        completion keys
+      - duration_80 / completion_80 / duration_100 / completion_100: kept
+        for the 80% and 100% targets so existing clients keep working
 
   Raises:
     ValueError: If calculation fails due to invalid inputs.
   """
-  # Create charger instance
-  charger = NissanLeafCharger()
-  charger.battery_capacity = cleaned_data['battery_capacity']
-  charger.battery_health = cleaned_data['battery_health']
-  charger.charging_rate = cleaned_data['charging_rate']
-  charger.current_charge = cleaned_data['current_charge']
-
-  # Get start time
+  charger = build_charger(cleaned_data)
   start_time = datetime.now()
+  rows = summarize(charger, start_time)
 
-  # Calculate charging times
-  time_to_80 = charger.calculate_charging_time(80.0)
-  time_to_100 = charger.calculate_charging_time(100.0)
-
-  # Format results
-  calculator = ChargingTimeCalculator()
-
-  results = {
+  results: Dict = {
     'start_time': start_time.strftime('%Y-%m-%d %H:%M:%S'),
-    'duration_80': calculator.format_time(time_to_80),
-    'completion_80': calculator.calculate_completion_time(
-      start_time,
-      time_to_80
-    ),
-    'duration_100': calculator.format_time(time_to_100),
-    'completion_100': calculator.calculate_completion_time(
-      start_time,
-      time_to_100
-    )
+    'model_taper': charger.model_taper,
+    'results': [
+      {
+        'target': row['target'],
+        'duration': row.get('duration', row.get('error')),
+        'completion': row.get('completion', row.get('error')),
+      }
+      for row in rows
+    ],
   }
+
+  # Flat keys for the standard targets, preserving the original response
+  # shape for the AJAX client and anything else already parsing it.
+  for row in rows:
+    if row['target'] in (80.0, 100.0):
+      suffix = f'{row["target"]:g}'
+      results[f'duration_{suffix}'] = row.get('duration', row.get('error'))
+      results[f'completion_{suffix}'] = row.get(
+        'completion', row.get('error')
+      )
 
   return results
 
@@ -150,10 +213,7 @@ def index():
   form_data: Mapping[str, str] = {}
 
   if request.method == 'POST':
-    # Validate inputs
-    is_valid, error_msg, cleaned_data = validate_form_input(
-      request.form
-    )
+    is_valid, error_msg, cleaned_data = validate_form_input(request.form)
 
     # Always echo back exactly what the user submitted, so the repopulated
     # form shows '90' rather than the parsed '90.0'.
@@ -171,7 +231,9 @@ def index():
     'index.html',
     results=results,
     error=error,
-    form_data=form_data
+    form_data=form_data,
+    presets=list(PRESETS.values()),
+    default_targets=', '.join(f'{t:g}' for t in DEFAULT_TARGETS)
   )
 
 
@@ -182,14 +244,12 @@ def calculate():
   Returns:
     JSON response with calculation results or error message.
   """
-  # Validate inputs
   is_valid, error_msg, cleaned_data = validate_form_input(request.form)
 
   if not is_valid:
     return jsonify({'error': error_msg}), 400
 
   try:
-    # Perform calculation
     results = perform_calculation(cleaned_data)
     return jsonify(results), 200
   except ValueError as e:

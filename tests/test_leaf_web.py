@@ -322,3 +322,121 @@ class TestCalculationAccuracy:
 
 if __name__ == '__main__':
   pytest.main([__file__, '-v'])
+
+
+class TestPresetsAndTargets:
+  """Scenario presets and configurable targets in the web form."""
+
+  BASE = {
+    'battery_capacity': '40',
+    'battery_health': '100',
+    'charging_rate': '6.6',
+    'current_charge': '0',
+  }
+
+  def test_form_offers_both_presets(self, client):
+    response = client.get('/')
+    assert b'Home overnight' in response.data
+    assert b'Workplace top-up' in response.data
+    assert b'name="preset"' in response.data
+
+  def test_form_offers_targets_and_taper_controls(self, client):
+    response = client.get('/')
+    assert b'name="targets"' in response.data
+    assert b'name="model_taper"' in response.data
+
+  def test_home_preset_sets_rate_and_target(self, client):
+    response = client.post('/calculate', data={
+      **self.BASE, 'preset': 'home', 'charging_rate': '1.4', 'targets': ''
+    })
+    assert response.status_code == 200
+    data = response.get_json()
+    # Explicit form fields win over the preset, matching the CLI.
+    assert [row['target'] for row in data['results']] == [80.0, 100.0]
+
+  def test_preset_applies_when_fields_are_left_at_defaults(self, client):
+    response = client.post('/calculate', data={
+      **self.BASE, 'preset': 'work'
+    })
+    assert response.status_code == 200
+
+  def test_unknown_preset_rejected(self, client):
+    response = client.post('/calculate', data={
+      **self.BASE, 'preset': 'roadtrip'
+    })
+    assert response.status_code == 400
+    assert 'Preset must be one of' in response.get_json()['error']
+
+  def test_custom_targets_are_honoured(self, client):
+    response = client.post('/calculate', data={
+      **self.BASE, 'targets': '50, 75, 90'
+    })
+    assert response.status_code == 200
+    data = response.get_json()
+    assert [row['target'] for row in data['results']] == [50.0, 75.0, 90.0]
+
+  def test_blank_targets_fall_back_to_defaults(self, client):
+    response = client.post('/calculate', data={**self.BASE, 'targets': '  '})
+    data = response.get_json()
+    assert [row['target'] for row in data['results']] == [80.0, 100.0]
+
+  def test_invalid_target_rejected(self, client):
+    response = client.post('/calculate', data={
+      **self.BASE, 'targets': '80, 150'
+    })
+    assert response.status_code == 400
+    assert 'Target percentage' in response.get_json()['error']
+
+  def test_legacy_flat_keys_still_present(self, client):
+    """The original response shape is preserved for existing clients."""
+    response = client.post('/calculate', data=self.BASE)
+    data = response.get_json()
+    for key in ('duration_80', 'completion_80',
+                'duration_100', 'completion_100'):
+      assert key in data
+
+  def test_results_table_renders_every_target(self, client):
+    response = client.post('/', data={**self.BASE, 'targets': '50, 90'})
+    assert b'50% charge' in response.data
+    assert b'90% charge' in response.data
+    assert b'100% charge' not in response.data
+
+
+class TestTaperToggle:
+  """The charge-taper toggle (ENHANCEMENTS #6)."""
+
+  BASE = {
+    'battery_capacity': '40',
+    'battery_health': '100',
+    'charging_rate': '6.6',
+    'current_charge': '0',
+    'targets': '100',
+  }
+
+  def test_taper_is_modelled_by_default(self, client):
+    response = client.post('/calculate', data=self.BASE)
+    data = response.get_json()
+    assert data['model_taper'] is True
+    assert data['results'][0]['duration'] == '7 hours 48 minutes'
+
+  def test_unchecked_box_submits_off_and_disables_taper(self, client):
+    """The hidden field means unchecking actually reaches the server."""
+    response = client.post('/calculate', data={
+      **self.BASE, 'model_taper': 'off'
+    })
+    data = response.get_json()
+    assert data['model_taper'] is False
+    assert data['results'][0]['duration'] == '6 hours 40 minutes'
+
+  def test_checked_box_sends_both_values_and_last_one_wins(self, client):
+    response = client.post('/calculate', data={
+      **self.BASE, 'model_taper': ['off', 'on']
+    })
+    assert response.get_json()['model_taper'] is True
+
+  def test_page_warns_when_taper_is_not_modelled(self, client):
+    response = client.post('/', data={**self.BASE, 'model_taper': 'off'})
+    assert b'taper not modelled' in response.data
+
+    response = client.post('/', data=self.BASE)
+    assert b'taper not modelled' not in response.data

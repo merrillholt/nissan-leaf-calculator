@@ -53,10 +53,13 @@ class TestIntegration:
         assert 0 < time_to_100 < 15  # Should be between 0 and 15 hours
         assert "hours" in formatted_time
 
-        # Calculate specific expected value
-        # (62 * 0.95 * (1.0 - 0.60) * 1.1) / 3.3 ≈ 7.92 hours
-        expected_time = (62 * 0.95 * 0.40 * 1.1) / 3.3
-        assert abs(time_to_100 - expected_time) < 0.01
+        # The constant-rate figure, which the taper model must exceed since
+        # this scenario charges well past the 80% taper threshold.
+        flat_time = (62 * 0.95 * 0.40 * 1.1) / 3.3
+        assert time_to_100 > flat_time
+
+        charger.model_taper = False
+        assert abs(charger.calculate_charging_time(100) - flat_time) < 0.01
 
     def test_end_to_end_calculation_scenario_3(self):
         """Test complete calculation scenario: Emergency charge."""

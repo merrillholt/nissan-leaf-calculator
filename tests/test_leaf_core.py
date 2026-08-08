@@ -1,7 +1,18 @@
 import pytest
 from datetime import datetime, timedelta
 
-from leaf_calculator.leaf_core import NissanLeafCharger, ChargingTimeCalculator
+from leaf_calculator.leaf_core import (
+    DEFAULT_TARGETS,
+    PRESETS,
+    ChargingTimeCalculator,
+    NissanLeafCharger,
+    summarize,
+    validate_battery_capacity,
+    validate_battery_health,
+    validate_charging_rate,
+    validate_current_charge,
+    validate_in_range,
+)
 
 
 class TestNissanLeafCharger:
@@ -137,12 +148,12 @@ class TestNissanLeafCharger:
 
     def test_calculate_charging_time_invalid_target_high(self):
         """Test that invalid high target percentage raises ValueError."""
-        with pytest.raises(ValueError, match='Target percentage must be between 0 and 100'):
+        with pytest.raises(ValueError, match='Target percentage must be'):
             self.charger.calculate_charging_time(101)
 
     def test_calculate_charging_time_invalid_target_low(self):
         """Test that invalid low target percentage raises ValueError."""
-        with pytest.raises(ValueError, match='Target percentage must be between 0 and 100'):
+        with pytest.raises(ValueError, match='Target percentage must be'):
             self.charger.calculate_charging_time(-1)
 
     def test_calculate_charging_time_boundary_values(self):
@@ -151,7 +162,9 @@ class TestNissanLeafCharger:
         result = self.charger.calculate_charging_time(0)
         assert result == 0
 
-        # Test 100% target
+        # Test 100% target. The taper is modelled by default, so this is
+        # longer than the constant-rate figure; see TestChargeTaper.
+        self.charger.model_taper = False
         result = self.charger.calculate_charging_time(100)
         expected = (40 * 1.0 * 1.1) / 6.6
         assert abs(result - expected) < 0.01
@@ -258,3 +271,168 @@ class TestChargingTimeCalculator:
         # Allow for rounding differences in seconds
         assert "2023-01-01 11:30:" in result
         assert result.startswith("2023-01-01 11:30:")
+
+class TestSharedValidators:
+    """The validators every front end shares (ENHANCEMENTS #2)."""
+
+    def test_in_range_accepts_bounds(self):
+        assert validate_in_range(0, 0, 100, 'Field') == 0.0
+        assert validate_in_range('100', 0, 100, 'Field') == 100.0
+
+    def test_in_range_rejects_outside(self):
+        with pytest.raises(ValueError, match='Field must be at least 0'):
+            validate_in_range(-1, 0, 100, 'Field')
+
+    def test_in_range_exclusive_minimum(self):
+        with pytest.raises(ValueError, match='greater than 0'):
+            validate_in_range(0, 0, 100, 'Field', exclusive_min=True)
+
+    def test_non_numeric_is_rejected(self):
+        with pytest.raises(ValueError, match='must be a number'):
+            validate_in_range('abc', 0, 100, 'Field')
+
+    def test_nan_and_inf_are_rejected(self):
+        for bad in ('nan', 'inf', '-inf'):
+            with pytest.raises(ValueError, match='finite'):
+                validate_in_range(bad, 0, 100, 'Field')
+
+    def test_choice_accepts_allowed_value(self):
+        assert validate_battery_capacity('62') == 62.0
+        assert validate_charging_rate(6.6) == 6.6
+
+    def test_choice_rejects_other_values(self):
+        with pytest.raises(ValueError, match='must be one of: 40, 62 kWh'):
+            validate_battery_capacity(50)
+        with pytest.raises(ValueError, match='must be one of'):
+            validate_charging_rate(5.0)
+
+    def test_health_rejects_zero(self):
+        with pytest.raises(ValueError):
+            validate_battery_health(0)
+
+    def test_current_charge_allows_zero(self):
+        assert validate_current_charge(0) == 0.0
+
+
+class TestPresets:
+    """Scenario presets (ENHANCEMENTS #3)."""
+
+    def test_only_home_and_work_exist(self):
+        assert sorted(PRESETS) == ['home', 'work']
+
+    def test_home_sets_rate_and_target(self):
+        charger = NissanLeafCharger()
+        preset = charger.apply_preset('home')
+        assert preset.label == 'Home overnight'
+        assert charger.charging_rate == 6.6
+        assert charger.targets == [80.0]
+
+    def test_work_sets_rate_and_target(self):
+        charger = NissanLeafCharger()
+        charger.apply_preset('work')
+        assert charger.charging_rate == 3.3
+        assert charger.targets == [100.0]
+
+    def test_preset_leaves_the_car_alone(self):
+        """A preset describes the scenario, not the vehicle."""
+        charger = NissanLeafCharger()
+        charger.battery_capacity = 62
+        charger.battery_health = 85
+        charger.current_charge = 40
+        charger.apply_preset('home')
+        assert charger.battery_capacity == 62
+        assert charger.battery_health == 85
+        assert charger.current_charge == 40
+
+    def test_preset_keys_are_case_insensitive(self):
+        charger = NissanLeafCharger()
+        charger.apply_preset('HOME')
+        assert charger.targets == [80.0]
+
+    def test_unknown_preset_raises(self):
+        charger = NissanLeafCharger()
+        with pytest.raises(ValueError, match='Unknown preset'):
+            charger.apply_preset('roadtrip')
+
+    def test_every_preset_rate_is_a_supported_rate(self):
+        supported = set(NissanLeafCharger.CHARGING_RATES.values())
+        for preset in PRESETS.values():
+            assert preset.charging_rate in supported
+
+
+class TestChargeTaper:
+    """Charge taper modelling (ENHANCEMENTS #6)."""
+
+    def setup_method(self):
+        self.charger = NissanLeafCharger()
+
+    def test_taper_is_on_by_default(self):
+        assert self.charger.model_taper is True
+
+    def test_below_taper_threshold_is_unaffected(self):
+        """Charging that ends at or below 80% is pure constant-rate."""
+        self.charger.model_taper = True
+        with_taper = self.charger.calculate_charging_time(80)
+        self.charger.model_taper = False
+        without = self.charger.calculate_charging_time(80)
+        assert abs(with_taper - without) < 1e-9
+
+    def test_taper_only_adds_time_above_the_threshold(self):
+        self.charger.model_taper = True
+        tapered = self.charger.calculate_charging_time(100)
+        self.charger.model_taper = False
+        flat = self.charger.calculate_charging_time(100)
+        assert tapered > flat
+
+    def test_disabling_taper_restores_the_linear_formula(self):
+        self.charger.model_taper = False
+        result = self.charger.calculate_charging_time(100)
+        assert abs(result - (40 * 1.1) / 6.6) < 1e-9
+
+    def test_charging_time_stays_monotonic_across_the_knee(self):
+        """More charge always takes longer, with no jump at 80%."""
+        times = [
+            self.charger.calculate_charging_time(target)
+            for target in (0, 25, 50, 79, 80, 81, 95, 100)
+        ]
+        assert all(b > a for a, b in zip(times, times[1:]))
+
+    def test_taper_is_continuous_at_the_threshold(self):
+        """No discontinuity where the flat and tapered regions meet."""
+        just_below = self.charger.calculate_charging_time(79.999)
+        just_above = self.charger.calculate_charging_time(80.001)
+        assert abs(just_above - just_below) < 0.01
+
+    def test_last_ten_percent_costs_more_than_the_first(self):
+        """The whole point of the taper: the top of the pack is slow."""
+        self.charger.current_charge = 0
+        first_ten = self.charger.calculate_charging_time(10)
+        self.charger.current_charge = 90
+        last_ten = self.charger.calculate_charging_time(100)
+        assert last_ten > first_ten * 2
+
+    def test_taper_does_not_affect_already_past_target(self):
+        self.charger.current_charge = 95
+        assert self.charger.calculate_charging_time(90) < 0
+
+
+class TestSummarize:
+    """The shared per-target result rows."""
+
+    def test_one_row_per_target(self):
+        charger = NissanLeafCharger()
+        charger.targets = [50.0, 80.0, 100.0]
+        rows = summarize(charger, datetime(2023, 1, 1, 10, 0, 0))
+        assert [row['target'] for row in rows] == [50.0, 80.0, 100.0]
+        assert all('duration' in row for row in rows)
+
+    def test_default_targets_are_80_and_100(self):
+        assert list(DEFAULT_TARGETS) == [80.0, 100.0]
+        assert NissanLeafCharger().targets == [80.0, 100.0]
+
+    def test_bad_state_becomes_a_row_error_not_an_exception(self):
+        charger = NissanLeafCharger()
+        charger.battery_health = 0
+        rows = summarize(charger, datetime(2023, 1, 1, 10, 0, 0))
+        assert all('error' in row for row in rows)
+        assert 'Battery health' in rows[0]['error']

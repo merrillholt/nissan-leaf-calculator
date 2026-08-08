@@ -113,6 +113,19 @@
     <!-- Main calculation form -->
     <form method="POST" action="/" id="calculator-form">
       <fieldset>
+        <legend>Scenario</legend>
+
+        <label for="preset">Preset</label>
+        <select id="preset" name="preset">
+          <option value="" {% if not form_data.get('preset') %}selected{% endif %}>Custom</option>
+          {% for preset in presets %}
+          <option value="{{ preset.key }}" {% if form_data.get('preset') == preset.key %}selected{% endif %}>{{ preset.label }} &mdash; {{ preset.charging_rate }} kW to {{ preset.target }}%</option>
+          {% endfor %}
+        </select>
+        <p class="hint">A preset fills in the rate and target below; anything you change there wins.</p>
+      </fieldset>
+
+      <fieldset>
         <legend>Battery Configuration</legend>
 
         <label for="battery_capacity">Battery Capacity</label>
@@ -155,6 +168,30 @@
           value="{{ form_data.get('current_charge', '0') }}"
           required
         >
+
+        <label for="targets">Target Charge Levels (%)</label>
+        <input
+          type="text"
+          id="targets"
+          name="targets"
+          inputmode="numeric"
+          placeholder="{{ default_targets }}"
+          value="{{ form_data.get('targets', default_targets) }}"
+        >
+        <p class="hint">Comma-separated, e.g. <code>80, 100</code>.</p>
+
+        <!-- The hidden field makes an unchecked box submit 'off' rather
+             than nothing at all; the server reads the last value. -->
+        <input type="hidden" name="model_taper" value="off">
+        <label class="checkbox">
+          <input
+            type="checkbox"
+            name="model_taper"
+            value="on"
+            {% if not form_data or form_data.getlist('model_taper')[-1:] != ['off'] %}checked{% endif %}
+          >
+          Model charge taper (charging slows as the pack fills)
+        </label>
       </fieldset>
 
       <button type="submit">Calculate Charging Time</button>
@@ -173,18 +210,18 @@
           </tr>
         </thead>
         <tbody>
+          {% for row in results.results %}
           <tr>
-            <td>80% charge</td>
-            <td>{{ results.duration_80 }}</td>
-            <td>{{ results.completion_80 }}</td>
+            <td>{{ '%g'|format(row.target) }}% charge</td>
+            <td>{{ row.duration }}</td>
+            <td>{{ row.completion }}</td>
           </tr>
-          <tr>
-            <td>100% charge</td>
-            <td>{{ results.duration_100 }}</td>
-            <td>{{ results.completion_100 }}</td>
-          </tr>
+          {% endfor %}
         </tbody>
       </table>
+      {% if not results.model_taper %}
+      <p class="hint">Charge taper not modelled &mdash; estimates near 100% will run optimistic.</p>
+      {% endif %}
     </section>
     {% endif %}
   </main>

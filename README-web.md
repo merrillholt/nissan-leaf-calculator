@@ -7,6 +7,8 @@ Flask-based web interface optimized for iSH Alpine on iOS iPhone.
 - Mobile-friendly, touch-optimized design
 - Works on iOS Safari in iSH Alpine
 - All calculation features from GUI/console versions
+- Scenario presets and any number of charge targets
+- Charge-taper modelling, with a toggle
 - Progressive enhancement with AJAX
 - Graceful degradation without JavaScript
 - Lightweight and fast (minimal dependencies)
@@ -91,21 +93,30 @@ python3 -m leaf_calculator.leaf_web
 
 ### Input Fields
 
-1. **Battery Capacity**: Select 40 kWh or 62 kWh
-2. **Battery Health**: Enter percentage (0-100%)
-3. **Charging Rate**: Select charging level:
+1. **Preset**: Pick a scenario to fill in the rate and target, or leave it on
+   "Custom":
+   - Home overnight — 6.6 kW to 80%
+   - Workplace top-up — 3.3 kW to 100%
+
+   Anything you change below overrides the preset.
+2. **Battery Capacity**: Select 40 kWh or 62 kWh
+3. **Battery Health**: Enter percentage (above 0, up to 100%)
+4. **Charging Rate**: Select charging level:
    - Level 1 (120V): 1.4 kW
    - Level 2 (240V): 3.3 kW or 6.6 kW
-4. **Current Charge**: Enter current battery percentage (0-100%)
+5. **Current Charge**: Enter current battery percentage (0-100%)
+6. **Target Charge Levels**: Comma-separated percentages, e.g. `80, 100`.
+   Leave blank for the default of 80% and 100%.
+7. **Model charge taper**: On by default. The Leaf's BMS slows charging as the
+   pack fills, so estimates past 80% take disproportionately longer. Untick for
+   a constant-rate estimate; the results then carry a note saying so.
 
 ### Calculating Charging Times
 
-1. Fill in all form fields
+1. Fill in the form fields
 2. Tap "Calculate Charging Time"
-3. View results showing:
-   - Time to reach 80% charge (recommended)
-   - Time to reach 100% charge (full)
-   - Estimated completion times
+3. View one results row per target, each showing the duration and the
+   estimated completion time
 
 ### Progressive Enhancement
 

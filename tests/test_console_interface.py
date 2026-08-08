@@ -1,10 +1,11 @@
 import pytest
-import sys
-from io import StringIO
-from unittest.mock import patch, MagicMock
-from pathlib import Path
+from unittest.mock import patch
 
 from leaf_calculator.leaf_console import ConsoleInterface
+from leaf_calculator.leaf_core import (
+    DEFAULT_TARGETS,
+    validate_current_charge,
+)
 
 
 class TestConsoleInterface:
@@ -23,14 +24,16 @@ class TestConsoleInterface:
     def test_get_valid_number_valid_input(self, mock_input):
         """Test get_valid_number with valid input."""
         mock_input.return_value = "50.5"
-        result = self.console.get_valid_number("Enter number: ", 0, 100)
+        result = self.console.get_valid_number(
+            "Enter number: ", validate_current_charge)
         assert result == 50.5
 
     @patch('builtins.input')
     def test_get_valid_number_quit(self, mock_input):
         """Test get_valid_number with quit input."""
         mock_input.return_value = "q"
-        result = self.console.get_valid_number("Enter number: ", 0, 100)
+        result = self.console.get_valid_number(
+            "Enter number: ", validate_current_charge)
         assert result is None
 
     @patch('builtins.input')
@@ -38,7 +41,8 @@ class TestConsoleInterface:
         """Test get_valid_number with out of range then valid input."""
         mock_input.side_effect = ["150", "50"]
         with patch('builtins.print'):
-            result = self.console.get_valid_number("Enter number: ", 0, 100)
+            result = self.console.get_valid_number(
+                "Enter number: ", validate_current_charge)
         assert result == 50.0
 
     @patch('builtins.input')
@@ -46,7 +50,8 @@ class TestConsoleInterface:
         """Test get_valid_number with invalid then valid input."""
         mock_input.side_effect = ["abc", "50"]
         with patch('builtins.print'):
-            result = self.console.get_valid_number("Enter number: ", 0, 100)
+            result = self.console.get_valid_number(
+                "Enter number: ", validate_current_charge)
         assert result == 50.0
 
     @patch('builtins.input')
@@ -109,8 +114,8 @@ class TestConsoleInterface:
     @patch('builtins.input')
     def test_run_complete_flow_success(self, mock_input):
         """Test complete successful run flow."""
-        # Simulate user inputs: battery selection, health=90%, current=20%, calculate, then quit
-        mock_input.side_effect = ["1", "1", "3", "90", "4", "20", "5", "q"]
+        # Battery selection, health=90%, current=20%, calculate, then quit
+        mock_input.side_effect = ["1", "1", "3", "90", "4", "20", "7", "q"]
 
         with patch('builtins.print') as mock_print:
             result = self.console.run()

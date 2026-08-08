@@ -6,6 +6,7 @@ from pathlib import Path
 
 try:
     from leaf_calculator.leaf_gui import NissanLeafGUI
+    from leaf_calculator.leaf_core import NissanLeafCharger
 except ImportError:
     # Skip GUI tests if tkinter is not available
     pytest.skip("tkinter not available", allow_module_level=True)
@@ -42,30 +43,26 @@ class TestNissanLeafGUI:
         assert self.gui.current_var.get() == "0"
         assert self.gui.charging_var.get() == "Level 2 (240V) 6.6kW"
 
-    def test_validate_number_valid(self):
-        """Test validate_number with valid input."""
-        result = self.gui.validate_number("50.5")
-        assert result == 50.5
+    def duration(self, index=0):
+        """Return the duration text of the given results row."""
+        return self.gui.result_rows[index * 2].cget('text')
 
-    def test_validate_number_zero(self):
-        """Test validate_number with zero."""
-        result = self.gui.validate_number("0")
-        assert result == 0.0
+    def completion(self, index=0):
+        """Return the completion text of the given results row."""
+        return self.gui.result_rows[index * 2 + 1].cget('text')
 
-    def test_validate_number_negative(self):
-        """Test validate_number with negative number."""
-        result = self.gui.validate_number("-10")
-        assert result == -10.0
+    def test_non_numeric_input_reports_an_error(self):
+        """Junk in a numeric field explains itself instead of becoming 0."""
+        self.gui.health_var.set("abc")
+        self.gui.update_calculations()
+        assert 'must be a number' in self.gui.error_label.cget('text')
+        assert self.duration() == ''
 
-    def test_validate_number_invalid(self):
-        """Test validate_number with invalid input."""
-        result = self.gui.validate_number("abc")
-        assert result == 0.0
-
-    def test_validate_number_empty(self):
-        """Test validate_number with empty string."""
-        result = self.gui.validate_number("")
-        assert result == 0.0
+    def test_empty_input_reports_an_error(self):
+        """An empty field is an error, not a silent zero."""
+        self.gui.current_var.set("")
+        self.gui.update_calculations()
+        assert self.gui.error_label.cget('text') != ''
 
     def test_update_calculations(self):
         """Test update_calculations method."""
@@ -85,18 +82,19 @@ class TestNissanLeafGUI:
         assert self.gui.charger.charging_rate == 3.3
 
     def test_validate_and_update_out_of_range_high(self):
-        """Test validate_and_update with value > 100."""
+        """A health above 100 is reported rather than silently rewritten."""
         self.gui.health_var.set("150")
         self.gui.validate_and_update()
-        # Should reset to default value
-        assert self.gui.health_var.get() == "100"
+        assert 'Battery health' in self.gui.error_label.cget('text')
+        # The user's input is left alone so they can correct it themselves.
+        assert self.gui.health_var.get() == "150"
 
     def test_validate_and_update_out_of_range_low(self):
-        """Test validate_and_update with value < 0."""
+        """A negative current charge is reported rather than reset."""
         self.gui.current_var.set("-10")
         self.gui.validate_and_update()
-        # Should reset to default value
-        assert self.gui.current_var.get() == "0"
+        assert 'Current charge' in self.gui.error_label.cget('text')
+        assert self.gui.current_var.get() == "-10"
 
     def test_battery_capacity_mapping(self):
         """Test battery capacity string to value mapping."""
@@ -148,7 +146,7 @@ class TestNissanLeafGUI:
         self.gui.health_var.set("0")
         self.gui.update_calculations()
 
-        assert self.gui.time_80_label.cget('text') == ''
+        assert self.duration() == ''
         assert 'Battery health' in self.gui.error_label.cget('text')
 
     def test_error_clears_on_recovery(self):
@@ -160,14 +158,102 @@ class TestNissanLeafGUI:
         self.gui.health_var.set("100")
         self.gui.update_calculations()
         assert self.gui.error_label.cget('text') == ''
-        assert self.gui.time_80_label.cget('text') != ''
+        assert self.duration() != ''
 
     def test_already_at_target_shown_in_results(self):
         """Charging past 80% reports that, rather than '0 minutes'."""
         self.gui.current_var.set("90")
         self.gui.update_calculations()
 
-        assert self.gui.time_80_label.cget('text') == 'Already at target charge'
-        assert self.gui.completion_80_label.cget('text') == \
-            'Already at target charge'
-        assert self.gui.time_100_label.cget('text') != 'Already at target charge'
+        assert self.duration(0) == 'Already at target charge'
+        assert self.completion(0) == 'Already at target charge'
+        assert self.duration(1) != 'Already at target charge'
+
+
+class TestGuiPresetsAndTargets:
+    """Presets, configurable targets and the taper toggle in the GUI."""
+
+    def setup_method(self):
+        self.root = tk.Tk()
+        self.root.withdraw()
+        self.gui = NissanLeafGUI(self.root)
+
+    def teardown_method(self):
+        if self.root:
+            self.root.destroy()
+
+    def duration(self, index=0):
+        return self.gui.result_rows[index * 2].cget('text')
+
+    def test_preset_dropdown_lists_both_presets(self):
+        values = self.gui.preset_combo.cget('values')
+        assert 'Home overnight' in values
+        assert 'Workplace top-up' in values
+        assert self.gui.preset_var.get() == 'Custom'
+
+    def test_preset_dropdown_is_readonly(self):
+        assert str(self.gui.preset_combo.cget('state')) == 'readonly'
+
+    def test_applying_home_preset_updates_rate_and_target(self):
+        self.gui.preset_var.set('Home overnight')
+        self.gui.apply_preset()
+        assert self.gui.charging_var.get() == 'Level 2 (240V) 6.6kW'
+        assert self.gui.targets_var.get() == '80'
+        assert self.gui.charger.targets == [80.0]
+
+    def test_applying_work_preset_updates_rate_and_target(self):
+        self.gui.preset_var.set('Workplace top-up')
+        self.gui.apply_preset()
+        assert self.gui.charging_var.get() == 'Level 2 (240V) 3.3kW'
+        assert self.gui.charger.targets == [100.0]
+
+    def test_editing_a_preset_field_clears_the_preset_label(self):
+        """The dropdown stops claiming a preset once you deviate from it."""
+        self.gui.preset_var.set('Home overnight')
+        self.gui.apply_preset()
+        self.gui.targets_var.set('90')
+        self.gui.on_manual_change()
+        assert self.gui.preset_var.get() == 'Custom'
+        assert self.gui.charger.targets == [90.0]
+
+    def test_results_grid_follows_the_target_list(self):
+        self.gui.targets_var.set('50, 75, 90')
+        self.gui.update_calculations()
+        assert self.gui.charger.targets == [50.0, 75.0, 90.0]
+        # Two labels per row: duration and completion.
+        assert len(self.gui.result_rows) == 6
+        assert all(label.cget('text') for label in self.gui.result_rows)
+
+    def test_invalid_target_reports_an_error(self):
+        self.gui.targets_var.set('80, 150')
+        self.gui.update_calculations()
+        assert 'Target percentage' in self.gui.error_label.cget('text')
+
+    def test_empty_target_list_reports_an_error(self):
+        self.gui.targets_var.set('')
+        self.gui.update_calculations()
+        assert 'at least one target' in self.gui.error_label.cget('text')
+
+    def test_taper_toggle_changes_the_estimate(self):
+        self.gui.targets_var.set('100')
+        self.gui.taper_var.set(True)
+        self.gui.update_calculations()
+        tapered = self.duration()
+
+        self.gui.taper_var.set(False)
+        self.gui.update_calculations()
+        assert self.duration() != tapered
+        assert self.gui.charger.model_taper is False
+
+    def test_charger_from_cli_prepopulates_the_form(self):
+        """A charger built from command-line flags seeds the GUI."""
+        root = tk.Tk()
+        root.withdraw()
+        try:
+            charger = NissanLeafCharger()
+            charger.targets = [55.0]
+            gui = NissanLeafGUI(root, charger)
+            assert gui.targets_var.get() == '55'
+            assert gui.charger is charger
+        finally:
+            root.destroy()
