@@ -5,4 +5,4 @@
 3. **Scenario presets**: Offer common charging profiles (home overnight, workplace top-up, road trip fast charge) selectable from both interfaces to pre-populate rates and targets.
 4. **Output reports**: Allow exporting a summary of inputs and computed finish times to text or CSV for record keeping.
 5. **Configurable inefficiency factor**: Surface the 10% energy overhead as a user-adjustable setting to account for charger efficiency differences.
-6. **Automated tests**: Add pytest coverage for the core calculations, especially percentage validation and no-rate edge cases.
+6. **Charge taper modeling**: The current model assumes a constant charging rate all the way to 100%. A real Leaf tapers as the pack approaches full, so estimates to 100% run optimistic. Model the taper, or document the caveat in the interfaces.

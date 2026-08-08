@@ -33,7 +33,7 @@ Flask-based web interface optimized for iSH Alpine on iOS iPhone.
 
 ### On Other Systems
 
-1. Ensure Python 3.8+ is installed:
+1. Ensure Python 3.10+ is installed:
    ```sh
    python3 --version
    ```
@@ -353,7 +353,7 @@ Possible improvements for future versions:
 For issues or questions:
 
 1. Check this README's Troubleshooting section
-2. Verify you're using Python 3.8+ and Flask 2.3+
+2. Verify you're using Python 3.10+ and Flask 2.3+
 3. Ensure all files are in the correct locations
 4. Check Flask logs for error messages
 

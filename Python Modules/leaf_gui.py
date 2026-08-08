@@ -49,7 +49,7 @@ class NissanLeafGUI:
         self.root.geometry('600x400')
 
         main_frame = ttk.Frame(self.root, padding='10')
-        main_frame.grid(row=0, column=0, sticky=(tk.W, tk.E, tk.N, tk.S))  # type: ignore[arg-type]
+        main_frame.grid(row=0, column=0, sticky=(tk.W, tk.E, tk.N, tk.S))
 
         # Configure grid weights to allow expansion
         self.root.columnconfigure(0, weight=1)
@@ -61,7 +61,7 @@ class NissanLeafGUI:
             main_frame, text='Calculation Start Time', padding='5'
         )
         self.time_frame.grid(
-            row=0, column=0, columnspan=2, sticky=(tk.W, tk.E), pady=5  # type: ignore[arg-type]
+            row=0, column=0, columnspan=2, sticky=(tk.W, tk.E), pady=5
         )
         self.time_frame.columnconfigure(0, weight=1)
         start_time_str = self.start_time.strftime('%Y-%m-%d %H:%M:%S')
@@ -70,7 +70,7 @@ class NissanLeafGUI:
 
         # Input fields - adjust column widths
         input_frame = ttk.Frame(main_frame)
-        input_frame.grid(row=1, column=0, columnspan=2, sticky=(tk.W, tk.E))  # type: ignore[arg-type]
+        input_frame.grid(row=1, column=0, columnspan=2, sticky=(tk.W, tk.E))
         input_frame.columnconfigure(1, weight=1)
 
         # Battery Capacity Selection
@@ -84,7 +84,7 @@ class NissanLeafGUI:
             values=list(NissanLeafCharger.BATTERY_CAPACITIES.keys()),
             width=30
         )
-        battery_combo.grid(row=0, column=1, sticky=(tk.W, tk.E), pady=5)  # type: ignore[arg-type]
+        battery_combo.grid(row=0, column=1, sticky=(tk.W, tk.E), pady=5)
         battery_combo.bind('<<ComboboxSelected>>', self.update_calculations)
 
         # Charging Rate Selection
@@ -98,7 +98,7 @@ class NissanLeafGUI:
             values=list(NissanLeafCharger.CHARGING_RATES.keys()),
             width=30
         )
-        charging_combo.grid(row=1, column=1, sticky=(tk.W, tk.E), pady=5)  # type: ignore[arg-type]
+        charging_combo.grid(row=1, column=1, sticky=(tk.W, tk.E), pady=5)
         charging_combo.bind('<<ComboboxSelected>>', self.update_calculations)
 
         # Battery Health
@@ -107,7 +107,7 @@ class NissanLeafGUI:
         )
         self.health_var = tk.StringVar(value='100')
         health_entry = ttk.Entry(input_frame, textvariable=self.health_var, width=30)
-        health_entry.grid(row=2, column=1, sticky=(tk.W, tk.E), pady=5)  # type: ignore[arg-type]
+        health_entry.grid(row=2, column=1, sticky=(tk.W, tk.E), pady=5)
         health_entry.bind('<KeyRelease>', self.validate_and_update)
 
         # Current Charge
@@ -116,7 +116,7 @@ class NissanLeafGUI:
         )
         self.current_var = tk.StringVar(value='0')
         current_entry = ttk.Entry(input_frame, textvariable=self.current_var, width=30)
-        current_entry.grid(row=3, column=1, sticky=(tk.W, tk.E), pady=5)  # type: ignore[arg-type]
+        current_entry.grid(row=3, column=1, sticky=(tk.W, tk.E), pady=5)
         current_entry.bind('<KeyRelease>', self.validate_and_update)
 
         # Results Frame
@@ -124,7 +124,7 @@ class NissanLeafGUI:
             main_frame, text='Charging Time Estimates', padding='10'
         )
         results_frame.grid(
-            row=2, column=0, columnspan=2, sticky=(tk.W, tk.E), pady=20  # type: ignore[arg-type]
+            row=2, column=0, columnspan=2, sticky=(tk.W, tk.E), pady=20
         )
         results_frame.columnconfigure(1, weight=1)
         results_frame.columnconfigure(2, weight=1)

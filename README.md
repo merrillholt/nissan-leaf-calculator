@@ -19,7 +19,7 @@ A Python application that calculates charging times for a Nissan Leaf electric v
 
 ## Requirements
 
-- Python 3.12+ (tested with 3.12.9)
+- Python 3.10+ (tested with 3.12 and 3.14)
 - tkinter (for GUI mode only, usually comes with Python)
 - Flask (for web mode only — `pip install flask`)
 - pytest (for running tests)
@@ -151,7 +151,7 @@ pylint "Python Modules/"
   - `test_leaf_web.py` - Web interface tests
   - `test_integration.py` - End-to-end integration tests
 - `requirements.txt` - Development dependencies
-- `pytest.ini` - Test configuration
+- `pyproject.toml` - Packaging plus pytest, mypy, pylint, black and coverage configuration
 - `CLAUDE.md` - Development guidelines and commands
 - `ENHANCEMENTS.md` - Planned future improvements
 
