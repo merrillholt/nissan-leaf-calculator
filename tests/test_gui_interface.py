@@ -4,11 +4,8 @@ import tkinter as tk
 from unittest.mock import Mock, patch, MagicMock
 from pathlib import Path
 
-# Add the Python Modules directory to the path
-sys.path.insert(0, str(Path(__file__).parent.parent / "Python Modules"))
-
 try:
-    from leaf_gui import NissanLeafGUI
+    from leaf_calculator.leaf_gui import NissanLeafGUI
 except ImportError:
     # Skip GUI tests if tkinter is not available
     pytest.skip("tkinter not available", allow_module_level=True)

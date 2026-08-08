@@ -5,33 +5,17 @@ It reuses the core calculation logic from leaf_core.py and provides a
 mobile-friendly, touch-optimized interface.
 """
 
-import os
-import sys
 from datetime import datetime
 from typing import Dict, Mapping, Optional, Tuple
 
 from flask import Flask, render_template, request, jsonify
 
-# Handle imports when running directly or via main.py
-try:
-  from leaf_core import NissanLeafCharger, ChargingTimeCalculator
-except ImportError:
-  current_dir = os.path.dirname(os.path.abspath(__file__))
-  sys.path.insert(0, current_dir)
-  from leaf_core import NissanLeafCharger, ChargingTimeCalculator
+from .leaf_core import NissanLeafCharger, ChargingTimeCalculator
 
-# Flask app initialization
-app = Flask(
-  __name__,
-  template_folder=os.path.join(
-    os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-    'templates'
-  ),
-  static_folder=os.path.join(
-    os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-    'static'
-  )
-)
+# templates/ and static/ sit inside this package, which is where Flask looks
+# by default -- so they resolve correctly whether the app runs from a source
+# checkout or an installed wheel.
+app = Flask(__name__)
 
 
 def validate_form_input(

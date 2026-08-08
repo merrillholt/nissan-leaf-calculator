@@ -4,18 +4,9 @@ Tests cover route accessibility, form submission, input validation,
 calculation correctness, error handling, and AJAX endpoint.
 """
 
-import sys
-import os
 import pytest
 
-# Add the modules directory to path
-modules_dir = os.path.join(
-  os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-  "Python Modules"
-)
-sys.path.insert(0, modules_dir)
-
-from leaf_web import app
+from leaf_calculator.leaf_web import app
 
 
 @pytest.fixture

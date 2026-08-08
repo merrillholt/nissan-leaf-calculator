@@ -49,7 +49,7 @@ test = [
 ]
 
 [project.scripts]
-nissan-leaf-calculator = "main:main"
+nissan-leaf-calculator = "leaf_calculator.cli:main"
 
 [project.urls]
 Homepage = "https://github.com/merrillholt/nissan-leaf-calculator"
@@ -57,13 +57,15 @@ Repository = "https://github.com/merrillholt/nissan-leaf-calculator.git"
 Issues = "https://github.com/merrillholt/nissan-leaf-calculator/issues"
 
 # Setuptools configuration
-[tool.setuptools]
-py-modules = ["main"]
-
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["Python Modules*"]
-exclude = ["tests*", "*.venv*", "*__pycache__*"]
+include = ["leaf_calculator*"]
+exclude = ["tests*", "legacy*", "*.venv*", "*__pycache__*"]
+
+# The web interface's assets live inside the package so they ship in the
+# wheel; without this the installed --web mode 500s on TemplateNotFound.
+[tool.setuptools.package-data]
+leaf_calculator = ["templates/*.html", "static/*.css", "static/*.js"]
 
 # Black configuration
 [tool.black]
@@ -101,7 +103,7 @@ ensure_newline_before_comments = true
 [tool.mypy]
 python_version = "3.10"
 # legacy/ holds the pre-refactor implementations, kept for reference only.
-exclude = ["Python Modules/legacy/"]
+exclude = ["legacy/"]
 warn_return_any = true
 warn_unused_configs = true
 disallow_untyped_defs = false
@@ -142,7 +144,7 @@ omit = [
     "*/venv/*",
     "*/.venv/*",
     "setup.py",
-    "Python Modules/legacy/*",
+    "legacy/*",
 ]
 
 [tool.coverage.report]
@@ -163,7 +165,7 @@ exclude_lines = [
 [tool.pylint.main]
 # legacy/ holds the pre-refactor implementations, kept for reference only.
 # Linting it only produces duplicate-code noise against the live modules.
-ignore-paths = ["Python Modules/legacy/.*"]
+ignore-paths = ["legacy/.*"]
 
 [tool.pylint.messages_control]
 disable = [

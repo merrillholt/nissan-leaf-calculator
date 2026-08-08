@@ -4,10 +4,7 @@ from io import StringIO
 from unittest.mock import patch, MagicMock
 from pathlib import Path
 
-# Add the Python Modules directory to the path
-sys.path.insert(0, str(Path(__file__).parent.parent / "Python Modules"))
-
-from leaf_console import ConsoleInterface
+from leaf_calculator.leaf_console import ConsoleInterface
 
 
 class TestConsoleInterface:

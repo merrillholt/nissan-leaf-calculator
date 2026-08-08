@@ -15,7 +15,7 @@ A Python application that calculates charging times for a Nissan Leaf electric v
   - 10% charging inefficiency factor
 - Provides estimates for both 80% and 100% charging targets
 - Available with GUI, console, or web interface
-- Comprehensive test suite with 98 tests
+- Comprehensive test suite with 100 tests
 
 ## Requirements
 
@@ -63,14 +63,17 @@ You can also run the individual interfaces directly:
 
 ```bash
 # GUI interface
-python "Python Modules/leaf_gui.py"
+python -m leaf_calculator.leaf_gui
 
 # Console interface
-python "Python Modules/leaf_console.py"
+python -m leaf_calculator.leaf_console
 
 # Web interface
-python "Python Modules/leaf_web.py"
+python -m leaf_calculator.leaf_web
 ```
+
+Use `python -m` rather than a file path: these modules import each other with
+relative imports, so running them as standalone scripts will not resolve.
 
 ## Example Calculations
 
@@ -90,7 +93,7 @@ python "Python Modules/leaf_web.py"
 
 ## Testing
 
-The project includes a comprehensive test suite with 98 tests covering:
+The project includes a comprehensive test suite with 100 tests covering:
 
 ### Run All Tests
 ```bash
@@ -120,30 +123,31 @@ pytest tests/test_integration.py -v
 ### Code Quality Tools
 ```bash
 # Type checking
-mypy "Python Modules/"
+mypy leaf_calculator/
 
 # Code quality analysis
-pylint "Python Modules/"
+pylint leaf_calculator/
 ```
 
 ### Project Commands (as defined in CLAUDE.md)
 - Run with GUI: `python main.py`
 - Run with console: `python main.py --console`
 - Run with web: `python main.py --web`
-- Type checking: `mypy "Python Modules/"`
-- Code quality: `pylint "Python Modules/"`
+- Type checking: `mypy leaf_calculator/`
+- Code quality: `pylint leaf_calculator/`
 
 ## Project Structure
 
-- `main.py` - Main entry point with command-line argument handling
-- `Python Modules/` - Core application modules
+- `main.py` - Thin wrapper so the app runs from a source checkout
+- `leaf_calculator/` - The application package
+  - `cli.py` - Command-line argument handling and interface selection
   - `leaf_core.py` - Core calculation logic and utilities
   - `leaf_gui.py` - GUI interface using tkinter
   - `leaf_console.py` - Console interface
   - `leaf_web.py` - Flask web interface (mobile-friendly, optimized for iSH on iOS)
-  - `legacy/` - Original implementations (for reference)
-- `templates/` - HTML templates for web interface
-- `static/` - CSS and JavaScript for web interface
+  - `templates/` - HTML templates for the web interface
+  - `static/` - CSS and JavaScript for the web interface
+- `legacy/` - Original implementations, kept for reference only
 - `tests/` - Comprehensive test suite
   - `test_leaf_core.py` - Core calculation tests
   - `test_gui_interface.py` - GUI interface tests
@@ -172,7 +176,7 @@ The application follows a modular architecture:
 
 ### Import Errors
 - Ensure you're running from the project root directory
-- Check that all files are in the correct "Python Modules/" directory
+- Ensure the `leaf_calculator/` package directory is intact
 
 ### Test Failures
 - Ensure pytest is installed: `uv pip install pytest`

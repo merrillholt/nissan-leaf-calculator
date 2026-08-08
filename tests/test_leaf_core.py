@@ -1,12 +1,7 @@
 import pytest
-import sys
 from datetime import datetime, timedelta
-from pathlib import Path
 
-# Add the Python Modules directory to the path
-sys.path.insert(0, str(Path(__file__).parent.parent / "Python Modules"))
-
-from leaf_core import NissanLeafCharger, ChargingTimeCalculator
+from leaf_calculator.leaf_core import NissanLeafCharger, ChargingTimeCalculator
 
 
 class TestNissanLeafCharger:

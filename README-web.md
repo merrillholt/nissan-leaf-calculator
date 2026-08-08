@@ -61,11 +61,10 @@ Or using the short flag:
 python3 main.py -w
 ```
 
-### Method 2: Running leaf_web.py directly
+### Method 2: Running the web module directly
 
 ```sh
-cd "Python Modules"
-python3 leaf_web.py
+python3 -m leaf_calculator.leaf_web
 ```
 
 ## Accessing the Interface
@@ -257,16 +256,17 @@ pytest tests/test_leaf_web.py::TestAjaxEndpoint -v
 
 ```
 nissan-leaf-calculator/
-├── Python Modules/
-│   ├── leaf_core.py       # Core calculation logic (shared)
+├── leaf_calculator/
+│   ├── cli.py              # Command-line entry point
+│   ├── leaf_core.py        # Core calculation logic (shared)
 │   ├── leaf_web.py         # Flask application
 │   ├── leaf_gui.py         # GUI interface (tkinter)
-│   └── leaf_console.py     # Console interface
-├── templates/
-│   └── index.html          # Main HTML template
-├── static/
-│   ├── style.css           # Mobile-first responsive CSS
-│   └── app.js              # AJAX progressive enhancement
+│   ├── leaf_console.py     # Console interface
+│   ├── templates/
+│   │   └── index.html      # Main HTML template
+│   └── static/
+│       ├── style.css       # Mobile-first responsive CSS
+│       └── app.js          # AJAX progressive enhancement
 ├── tests/
 │   └── test_leaf_web.py    # Flask route tests
 ├── main.py                 # Entry point with --web flag

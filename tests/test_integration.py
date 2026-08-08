@@ -4,10 +4,7 @@ import subprocess
 from pathlib import Path
 from unittest.mock import patch
 
-# Add the Python Modules directory to the path
-sys.path.insert(0, str(Path(__file__).parent.parent / "Python Modules"))
-
-from leaf_core import NissanLeafCharger, ChargingTimeCalculator
+from leaf_calculator.leaf_core import NissanLeafCharger, ChargingTimeCalculator
 
 
 class TestIntegration:
@@ -159,24 +156,50 @@ class TestIntegration:
         time = charger.calculate_charging_time(80)
         assert time > 100  # Should take very long
 
-    def test_main_entry_point_imports(self):
-        """Test that main.py can import all required modules."""
-        main_path = Path(__file__).parent.parent / "main.py"
+    def test_main_entry_point_runs(self):
+        """`python main.py --help` works from a source checkout.
 
-        # Test that main.py exists and is readable
-        assert main_path.exists()
+        Runs it for real rather than just loading the spec, so the whole
+        import chain through leaf_calculator.cli is exercised.
+        """
+        repo_root = Path(__file__).parent.parent
+        result = subprocess.run(
+            [sys.executable, "main.py", "--help"],
+            cwd=repo_root,
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+        assert result.returncode == 0, result.stderr
+        assert "Nissan Leaf Charging Calculator" in result.stdout
+        for flag in ("--gui", "--console", "--web"):
+            assert flag in result.stdout
 
-        # Test that we can import the main functionality without errors
-        # This validates the module path handling
-        try:
-            import importlib.util
-            spec = importlib.util.spec_from_file_location("main", main_path)
-            main_module = importlib.util.module_from_spec(spec)
-            # Don't execute main(), just test that it can be loaded
-            assert spec is not None
-            assert spec.loader is not None
-        except Exception as e:
-            pytest.fail(f"Failed to load main.py: {e}")
+    def test_main_rejects_conflicting_modes(self):
+        """Two interface flags is an error, not a silent fallback to GUI."""
+        repo_root = Path(__file__).parent.parent
+        result = subprocess.run(
+            [sys.executable, "main.py", "--console", "--web"],
+            cwd=repo_root,
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+        assert result.returncode != 0
+        assert "not allowed with" in result.stderr
+
+    def test_package_console_script_entry_point(self):
+        """The module entry point matches what [project.scripts] points at."""
+        result = subprocess.run(
+            [sys.executable, "-c",
+             "from leaf_calculator.cli import main; print(callable(main))"],
+            cwd=Path(__file__).parent.parent,
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+        assert result.returncode == 0, result.stderr
+        assert result.stdout.strip() == "True"
 
     def test_calculation_precision(self):
         """Test calculation precision and floating point handling."""

@@ -4,12 +4,24 @@
 - Run with GUI (default): `python main.py`
 - Run with console: `python main.py --console`
 - Run with web: `python main.py --web`
-- Run GUI directly: `python "Python Modules/leaf_gui.py"`
-- Run console directly: `python "Python Modules/leaf_console.py"`
-- Run web directly: `python "Python Modules/leaf_web.py"`
+- Run GUI directly: `python -m leaf_calculator.leaf_gui`
+- Run console directly: `python -m leaf_calculator.leaf_console`
+- Run web directly: `python -m leaf_calculator.leaf_web`
 - Tests: `pytest`
-- Type checking: `mypy "Python Modules/"`
-- Code quality: `pylint "Python Modules/"`
+- Type checking: `mypy leaf_calculator/`
+- Code quality: `pylint leaf_calculator/`
+
+## Layout
+The application package is `leaf_calculator/`, with `templates/` and `static/`
+inside it so Flask's defaults resolve them in both a source checkout and an
+installed wheel. `main.py` at the repo root is a thin wrapper around
+`leaf_calculator.cli:main`, which is also the installed console script.
+`legacy/` at the repo root holds pre-refactor code for reference and is
+excluded from packaging, mypy, pylint and coverage.
+
+Use `python -m` rather than running module files by path: the modules use
+relative imports (`from .leaf_core import ...`), so executing them as scripts
+will not resolve.
 
 All tool configuration lives in `pyproject.toml`. There is no `pytest.ini` — adding
 one back would silently shadow the `[tool.pytest.ini_options]` block.

@@ -8,25 +8,7 @@ import tkinter as tk
 from tkinter import ttk
 from datetime import datetime
 
-# Import from the same directory with a path-based fallback
-try:
-    from leaf_core import NissanLeafCharger, ChargingTimeCalculator
-except ImportError:
-    import importlib.util
-    from pathlib import Path
-
-    core_path = Path(__file__).with_name('leaf_core.py')
-    spec = importlib.util.spec_from_file_location('leaf_core', core_path)
-    if spec is not None:
-        leaf_core = importlib.util.module_from_spec(spec)
-        if spec.loader:
-            spec.loader.exec_module(leaf_core)
-            NissanLeafCharger = leaf_core.NissanLeafCharger  # type: ignore
-            ChargingTimeCalculator = leaf_core.ChargingTimeCalculator  # type: ignore
-        else:
-            raise ImportError("Cannot load leaf_core module")
-    else:
-        raise ImportError("Cannot create spec for leaf_core module")
+from .leaf_core import NissanLeafCharger, ChargingTimeCalculator
 
 
 class NissanLeafGUI:
